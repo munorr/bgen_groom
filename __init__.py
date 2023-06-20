@@ -544,11 +544,24 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
                     return True
             return False
 
+        def load_material(nt_name, link=True):
+            if not os.path.isfile(nodelib_path):
+                return False
+
+            with bpy.data.libraries.load(nodelib_path, link=link) as (data_from, data_to):
+                if nt_name in data_from.materials:
+                    data_to.materials = [nt_name]
+                    return True
+            return False
+        
         if "bgen_v2_nodes" not in bpy.data.node_groups:
             load_node("bgen_v2_nodes", link=False)
             
         if "bgen_v2_hair" not in bpy.data.node_groups:
             load_node("bgen_v2_hair", link=False)
+
+        if "BV2_Hair_Shader" not in bpy.data.materials:
+            load_material("BV2_Hair_Shader", link=False)
 
         return context.window_manager.invoke_props_dialog(self)
     
@@ -2016,99 +2029,103 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
                     #MATERIAL CONTROL DATA
                     #-------------------------------------------------------------------------------------------------
-                    mattName = bpy.data.materials[bpy.context.scene.bv2_tools.mattList].name
-                    mattData = bpy.data.materials[mattName]
-                    
-                    #Eevee Material
-                    emix1Node = bpy.data.materials[mattName].node_tree.nodes['Eevee Mix']
-                    ecolvar = bpy.data.materials[mattName].node_tree.nodes['Eevee Variation']
-                    egrad = bpy.data.materials[mattName].node_tree.nodes['Eevee Gradient']
-                    ebsdf = bpy.data.materials[mattName].node_tree.nodes['Eevee bsdf']
-                    
-                    #Cycles Material
-                    cgrad = bpy.data.materials[mattName].node_tree.nodes['Cycles Gradient']
-                    cbsdf = bpy.data.materials[mattName].node_tree.nodes['Cycles bsdf']
-                    ccolvar = bpy.data.materials[mattName].node_tree.nodes['Cycles Variation']
-                    
-                    #MATERIAL DRWAWER
-                    if obj_exp.my_expT1: #MATERIAL DRAWER OPEN
-                        row1.prop(obj_exp, "my_expT1",icon="TRIA_DOWN", text="MATERIAL", emboss=False)
-                        matCntr.draw(context, row1, matNode, text = '')
-                        mbox1 = col_.box()
-                        mcol1 = mbox1.column(align = True)
-                        mrow1 = mcol1.row(align = True)
-                        mrow1.scale_x = 1.1
-                        mrow1.scale_y = 1.2
+                    if len(get_materials()) > 0:
+                        mattName = bpy.data.materials[bpy.context.scene.bv2_tools.mattList].name
+                        mattData = bpy.data.materials[mattName]
                         
-                        mrow_ = col_.row()
-                        mytool = context.scene.bv2_tools
+                        #Eevee Material
+                        emix1Node = bpy.data.materials[mattName].node_tree.nodes['Eevee Mix']
+                        ecolvar = bpy.data.materials[mattName].node_tree.nodes['Eevee Variation']
+                        egrad = bpy.data.materials[mattName].node_tree.nodes['Eevee Gradient']
+                        ebsdf = bpy.data.materials[mattName].node_tree.nodes['Eevee bsdf']
+                        
+                        #Cycles Material
+                        cgrad = bpy.data.materials[mattName].node_tree.nodes['Cycles Gradient']
+                        cbsdf = bpy.data.materials[mattName].node_tree.nodes['Cycles bsdf']
+                        ccolvar = bpy.data.materials[mattName].node_tree.nodes['Cycles Variation']
+                        
+                        #MATERIAL DRWAWER
+                        if obj_exp.my_expT1: #MATERIAL DRAWER OPEN
+                            row1.prop(obj_exp, "my_expT1",icon="TRIA_DOWN", text="MATERIAL", emboss=False)
+                            matCntr.draw(context, row1, matNode, text = '')
+                            mbox1 = col_.box()
+                            mcol1 = mbox1.column(align = True)
+                            mrow1 = mcol1.row(align = True)
+                            mrow1.scale_x = 1.1
+                            mrow1.scale_y = 1.2
+                            
+                            mrow_ = col_.row()
+                            mytool = context.scene.bv2_tools
 
-                        mrow1.prop(mytool, "mattList", text = "", icon = "MATERIAL", icon_only = True)
-                        mts_ = bpy.data.materials[bpy.context.scene.bv2_tools.mattList]
-                        mrow1.prop(mts_,"name", text = "",toggle=True, emboss = True)
-                        mrow1.operator("object.bv2_single_user_matt", text="", icon = "DUPLICATE")
-                        
-                        #bgenMod["Input_10"] = mts_
-                        #bpy.data.node_groups[bgenModName].nodes["ID:bv2_MC_001"].inputs[0].default_value = bpy.data.materials['BV2_Hair_Shader.001']
-                        #bpy.data.node_groups["bgen_v2_hair"].nodes["ID:bv2_MC_001"].inputs[0].default_value = None
-                        
+                            mrow1.prop(mytool, "mattList", text = "", icon = "MATERIAL", icon_only = True)
+                            mts_ = bpy.data.materials[bpy.context.scene.bv2_tools.mattList]
+                            mrow1.prop(mts_,"name", text = "",toggle=True, emboss = True)
+                            mrow1.operator("object.bv2_single_user_matt", text="", icon = "DUPLICATE")
+                            
+                            #bgenMod["Input_10"] = mts_
+                            #bpy.data.node_groups[bgenModName].nodes["ID:bv2_MC_001"].inputs[0].default_value = bpy.data.materials['BV2_Hair_Shader.001']
+                            #bpy.data.node_groups["bgen_v2_hair"].nodes["ID:bv2_MC_001"].inputs[0].default_value = None
+                            
 
 
-                        mrow_.prop(mytool, "mattren",expand = True)
-                        if bpy.context.scene.bv2_tools.mattren == 'EEVEE':
-                            mbox_ = col_.box()
-                            mcol_ = mbox_.column()
-                            mcol_.label(text = "Hair Color:")
-                            mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
+                            mrow_.prop(mytool, "mattren",expand = True)
+                            if bpy.context.scene.bv2_tools.mattren == 'EEVEE':
+                                mbox_ = col_.box()
+                                mcol_ = mbox_.column()
+                                mcol_.label(text = "Hair Color:")
+                                mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
+                                
+                                row_ = col_.row(align = False)
+                                grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                grid_l.alignment = "RIGHT"
+                                grid_l.scale_x = 1.4
+                                grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                
+                                grid_l.label(text = "Color Variation")
+                                grid_l.label(text = "            Metalic")
+                                grid_l.label(text = "         Specular")
+                                grid_l.label(text = "      Roughness")
+                                grid_l.label(text = "   Transmission")
+                                
+                                ecolvar.inputs[7].draw(context, grid_r, ecolvar, text = '')
+                                ebsdf.inputs[6].draw(context, grid_r, emix1Node, text = '')
+                                ebsdf.inputs[7].draw(context, grid_r, emix1Node, text = '')
+                                ebsdf.inputs[9].draw(context, grid_r, emix1Node, text = '')
+                                ebsdf.inputs[17].draw(context, grid_r, emix1Node, text = '')
                             
-                            row_ = col_.row(align = False)
-                            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
-                            grid_l.alignment = "RIGHT"
-                            grid_l.scale_x = 1.4
-                            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
-                            
-                            grid_l.label(text = "Color Variation")
-                            grid_l.label(text = "            Metalic")
-                            grid_l.label(text = "         Specular")
-                            grid_l.label(text = "      Roughness")
-                            grid_l.label(text = "   Transmission")
-                            
-                            ecolvar.inputs[7].draw(context, grid_r, ecolvar, text = '')
-                            ebsdf.inputs[6].draw(context, grid_r, emix1Node, text = '')
-                            ebsdf.inputs[7].draw(context, grid_r, emix1Node, text = '')
-                            ebsdf.inputs[9].draw(context, grid_r, emix1Node, text = '')
-                            ebsdf.inputs[17].draw(context, grid_r, emix1Node, text = '')
+                            if bpy.context.scene.bv2_tools.mattren == 'CYCLES':
+                                mbox_ = col_.box()
+                                mcol_ = mbox_.column()
+                                
+                                mcol_.label(text = "Hair Color:")
+                                mcol_.template_color_ramp(cgrad, "color_ramp",expand = False)
+                                
+                                row_ = col_.row(align = False)
+                                grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                grid_l.alignment = "RIGHT"
+                                grid_l.scale_x = 1.2
+                                grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                
+                                grid_l.label(text = "      Color Variation")
+                                grid_l.label(text = "            Roughness")
+                                grid_l.label(text = "Radial Roughness")
+                                grid_l.label(text = "                        Coat")
+                                grid_l.label(text = "Random Roughness")
+                                grid_l.label(text = "                           IOR")
+                                
+                                ccolvar.inputs[7].draw(context, grid_r, ecolvar, text = '')
+                                cbsdf.inputs[5].draw(context, grid_r, emix1Node, text = '')
+                                cbsdf.inputs[6].draw(context, grid_r, emix1Node, text = '')
+                                cbsdf.inputs[7].draw(context, grid_r, emix1Node, text = '')
+                                cbsdf.inputs[11].draw(context, grid_r, emix1Node, text = '')
+                                cbsdf.inputs[8].draw(context, grid_r, emix1Node, text = '')
+                        else: #MATERIAL DRAWER CLOSE
+                            row1.prop(obj_exp, "my_expT1",icon="TRIA_RIGHT", text="MATERIAL", emboss=False)
+                            matCntr.draw(context, row1, matNode, text = '')
+
+                    else:
+                        row1.label(text="BGEN Material not available")
                         
-                        if bpy.context.scene.bv2_tools.mattren == 'CYCLES':
-                            mbox_ = col_.box()
-                            mcol_ = mbox_.column()
-                            
-                            mcol_.label(text = "Hair Color:")
-                            mcol_.template_color_ramp(cgrad, "color_ramp",expand = False)
-                            
-                            row_ = col_.row(align = False)
-                            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
-                            grid_l.alignment = "RIGHT"
-                            grid_l.scale_x = 1.2
-                            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
-                            
-                            grid_l.label(text = "      Color Variation")
-                            grid_l.label(text = "            Roughness")
-                            grid_l.label(text = "Radial Roughness")
-                            grid_l.label(text = "                        Coat")
-                            grid_l.label(text = "Random Roughness")
-                            grid_l.label(text = "                           IOR")
-                            
-                            ccolvar.inputs[7].draw(context, grid_r, ecolvar, text = '')
-                            cbsdf.inputs[5].draw(context, grid_r, emix1Node, text = '')
-                            cbsdf.inputs[6].draw(context, grid_r, emix1Node, text = '')
-                            cbsdf.inputs[7].draw(context, grid_r, emix1Node, text = '')
-                            cbsdf.inputs[11].draw(context, grid_r, emix1Node, text = '')
-                            cbsdf.inputs[8].draw(context, grid_r, emix1Node, text = '')
-                    else: #MATERIAL DRAWER CLOSE
-                        row1.prop(obj_exp, "my_expT1",icon="TRIA_RIGHT", text="MATERIAL", emboss=False)
-                        matCntr.draw(context, row1, matNode, text = '')
-                    
             # DEFORMERS TAB
             if bpy.context.scene.bv2_tools.utilDrawer == "DEFORMERS":
                 if mainCurve and get_gNode(obj)[2] == "ID:BV2_0001":
@@ -2169,17 +2186,17 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
 
                                 #grid_l.separator(factor=.5)
-                                grid_l.label(text = "                       Density")
-                                grid_l.label(text = "          Density Radius")
-                                grid_l.separator(factor=.5)
+                                #grid_l.label(text = "                       Density")
+                                #grid_l.label(text = "          Density Radius")
+                                #grid_l.separator(factor=.5)
                                 grid_l.label(text = "             Mesh Subdiv")
                                 grid_l.label(text = "Interpulation Guides")
                                 #grid_l.label(text = "           [Clump Factor]")
 
                                 #grid_r.separator(factor=.5)
-                                grid_r.prop(bgenMod, '["Input_11"]', text = '')
-                                grid_r.prop(bgenMod, '["Input_13"]', text = '')
-                                grid_r.separator(factor=.5)
+                                #grid_r.prop(bgenMod, '["Input_11"]', text = '')
+                                #grid_r.prop(bgenMod, '["Input_13"]', text = '')
+                                #grid_r.separator(factor=.5)
                                 grid_r.prop(bgenMod, '["Input_63"]', text = '')
                                 grid_r.prop(bgenMod, '["Input_64"]', text = '')
                                 #grid_r.prop(bgenMod, '["Input_38"]', text = '')
