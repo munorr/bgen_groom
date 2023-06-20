@@ -532,7 +532,8 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
     
     def invoke(self, context, event):
         dirpath = os.path.dirname(os.path.realpath(__file__))
-        nodelib_path = os.path.join(dirpath, "resources\bgen_v2_nodes.blend")
+        resource_folder = os.path.join(dirpath,"resources")
+        nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
 
         def load_node(nt_name, link=True):
             if not os.path.isfile(nodelib_path):
