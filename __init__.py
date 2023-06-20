@@ -1515,6 +1515,11 @@ class BV2_PT_bv2Properties(bpy.types.PropertyGroup):
         items=(('EEVEE', "Eevee", "Rendered with Eevee"),
                ('CYCLES', "Cycles", "Rendered with Cycles")),
         default='EEVEE')
+    
+    material_color: bpy.props.EnumProperty(
+        items=(('STRAND', "Strand", "Takes Color of Strand"),
+               ('SURFACE', "Surface", "Inherits the color of the surface")),
+        default='STRAND')
         
     utilDrawer: bpy.props.EnumProperty(
         items=(('INITIALIZE', "Initialize", "Set up hair Curve"),
@@ -2032,17 +2037,19 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                     if len(get_materials()) > 0:
                         mattName = bpy.data.materials[bpy.context.scene.bv2_tools.mattList].name
                         mattData = bpy.data.materials[mattName]
-                        
+                        material_nt_data = bpy.data.materials[mattName].node_tree.nodes
+                        node_data = bpy.data.node_groups[bgenModName].nodes
+
                         #Eevee Material
-                        emix1Node = bpy.data.materials[mattName].node_tree.nodes['Eevee Mix']
-                        ecolvar = bpy.data.materials[mattName].node_tree.nodes['Eevee Variation']
-                        egrad = bpy.data.materials[mattName].node_tree.nodes['Eevee Gradient']
-                        ebsdf = bpy.data.materials[mattName].node_tree.nodes['Eevee bsdf']
-                        
+                        emix1Node = material_nt_data['Eevee Mix']
+                        ecolvar = material_nt_data['Eevee Variation']
+                        egrad = material_nt_data['Eevee Gradient']
+                        ebsdf = material_nt_data['Eevee bsdf']
+
                         #Cycles Material
-                        cgrad = bpy.data.materials[mattName].node_tree.nodes['Cycles Gradient']
-                        cbsdf = bpy.data.materials[mattName].node_tree.nodes['Cycles bsdf']
-                        ccolvar = bpy.data.materials[mattName].node_tree.nodes['Cycles Variation']
+                        cgrad = material_nt_data['Cycles Gradient']
+                        cbsdf = material_nt_data['Cycles bsdf']
+                        ccolvar = material_nt_data['Cycles Variation']
                         
                         #MATERIAL DRWAWER
                         if obj_exp.my_expT1: #MATERIAL DRAWER OPEN
@@ -2061,20 +2068,30 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             mts_ = bpy.data.materials[bpy.context.scene.bv2_tools.mattList]
                             mrow1.prop(mts_,"name", text = "",toggle=True, emboss = True)
                             mrow1.operator("object.bv2_single_user_matt", text="", icon = "DUPLICATE")
-                            
-                            #bgenMod["Input_10"] = mts_
-                            #bpy.data.node_groups[bgenModName].nodes["ID:bv2_MC_001"].inputs[0].default_value = bpy.data.materials['BV2_Hair_Shader.001']
-                            #bpy.data.node_groups["bgen_v2_hair"].nodes["ID:bv2_MC_001"].inputs[0].default_value = None
-                            
-
 
                             mrow_.prop(mytool, "mattren",expand = True)
+                            
                             if bpy.context.scene.bv2_tools.mattren == 'EEVEE':
                                 mbox_ = col_.box()
                                 mcol_ = mbox_.column()
-                                mcol_.label(text = "Hair Color:")
-                                mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
-                                
+                                mrow_ = mcol_.row(align = True)
+                                mrow_.label(text = "Hair Color:")
+
+                                #-------------------------------------------------------------------------------
+                                if 'color_switch_eevee' in material_nt_data and "ID:bv2_SC_001" in node_data:
+                                    scCntr = node_data["ID:bv2_SC_001"].inputs[0]
+                                    mrow_.prop(mytool, "material_color",expand = True)
+                                    color_switch_eevee = material_nt_data["color_switch_eevee"]
+                                    if bpy.context.scene.bv2_tools.material_color == "STRAND":
+                                        mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
+                                    else:
+                                        scCntr.draw(context, mcol_, dmNode, text = '')
+                                    color_switch_eevee.inputs[0].draw(context, mrow_, color_switch_eevee, text = '')
+                                else:
+                                    mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
+
+                                #-------------------------------------------------------------------------------
+
                                 row_ = col_.row(align = False)
                                 grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
                                 grid_l.alignment = "RIGHT"
@@ -2096,9 +2113,22 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             if bpy.context.scene.bv2_tools.mattren == 'CYCLES':
                                 mbox_ = col_.box()
                                 mcol_ = mbox_.column()
-                                
-                                mcol_.label(text = "Hair Color:")
-                                mcol_.template_color_ramp(cgrad, "color_ramp",expand = False)
+                                mrow_ = mcol_.row(align = True)
+                                mrow_.label(text = "Hair Color:")
+                                #-------------------------------------------------------------------------------
+                                if 'color_switch_cycles' in material_nt_data and "ID:bv2_SC_001" in node_data:
+                                    scCntr = node_data["ID:bv2_SC_001"].inputs[0]
+                                    mrow_.prop(mytool, "material_color",expand = True)
+                                    color_switch_cycles = material_nt_data["color_switch_cycles"]
+                                    if bpy.context.scene.bv2_tools.material_color == "STRAND":
+                                        mcol_.template_color_ramp(cgrad, "color_ramp",expand = False)
+                                    else:
+                                        scCntr.draw(context, mcol_, dmNode, text = '')
+                                    color_switch_cycles.inputs[0].draw(context, mrow_, color_switch_cycles, text = '')
+                                else:
+                                    mcol_.template_color_ramp(cgrad, "color_ramp",expand = False)
+
+                                #-------------------------------------------------------------------------------
                                 
                                 row_ = col_.row(align = False)
                                 grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
