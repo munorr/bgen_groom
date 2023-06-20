@@ -1774,8 +1774,9 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             col.scale_y = 1.2
             
             box_main = col.box()
-            
-            row_label = box_main.row(align=False)
+            row_main = box_main.row()
+
+            row_label = row_main.row(align=False)
             row_label.alignment = "LEFT"
             
             # OBJECT LABELING
@@ -1807,6 +1808,9 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                     row_label.label(text = obj.name, icon = "OUTLINER_DATA_CURVES")
                     row_label.label(text = "", icon = 'RIGHTARROW')
 
+            row_pin = row_main.row()
+            row_pin.alignment = "RIGHT"
+            row_pin.prop(bv2_tools, "pin_obj", text="", icon = "PINNED" if bv2_tools.pin_obj else "UNPINNED", icon_only = True, emboss=False)
 
             #except:
             #    pass
@@ -1823,9 +1827,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                 row_exec.alignment = "RIGHT"
                 row_exec.label(text = execTime + "ms", icon = "PREVIEW_RANGE")
             
-            row_pin = row_label.row()
-            row_pin.alignment = "RIGHT"
-            row_pin.prop(bv2_tools, "pin_obj", text="", icon = "PINNED" if bv2_tools.pin_obj else "UNPINNED", icon_only = True, emboss=False)
+            
 
             row0 = col.row(align = False)
             row0.scale_x = 1.1
