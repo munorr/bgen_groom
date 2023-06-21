@@ -1165,9 +1165,10 @@ class BV2_OT_rescale_hair(bpy.types.Operator):
             mesh_obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index].parent
             bpy.ops.object.select_all(action='DESELECT')
             for obj_ in get_hairCurve_list(mesh_obj):
-                #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-                obj_.hide_select = False
-                obj_.select_set(True)
+                if obj_.type == "CURVES":
+                    #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+                    obj_.hide_select = False
+                    obj_.select_set(True)
 
             mesh_obj.select_set(True)
             bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
