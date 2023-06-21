@@ -12,6 +12,7 @@ bl_info = {
 
 import bpy
 import os
+import time
 
 from . import addon_updater_ops
 from bpy.utils import previews
@@ -919,7 +920,11 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             cloth_modifier.settings.vertex_group_mass = "Group"  # Sets Pin group
             cloth_modifier.collision_settings.vertex_group_object_collisions = "" # Sets Collision group
             cloth_modifier.collision_settings.distance_min = 0.001
-            cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
+            if self.collision_collection == "":
+                pass
+                #cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
+            else:
+                cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
             
             
             
@@ -1253,6 +1258,7 @@ class BV2_OT_execute_cloth_settings(bpy.types.Operator):
         clsnColl = bpy.context.scene.bv2_tools.col_collection
         #pinStiff = bpy.context.scene.bv2_tools.my_float5
         airVis = bpy.context.scene.bv2_tools.my_float6
+        disk_cache = bpy.context.scene.bv2_tools.disk_cache
 
         frame_start = bpy.context.scene.bv2_tools.sim_start
         frame_end = bpy.context.scene.bv2_tools.sim_end
@@ -1304,6 +1310,10 @@ class BV2_OT_execute_cloth_settings(bpy.types.Operator):
 
                         cloth_modifier.point_cache.frame_start = frame_start
                         cloth_modifier.point_cache.frame_end = frame_end
+                        if disk_cache == False:
+                            cloth_modifier.point_cache.use_disk_cache = False
+                        else:
+                            cloth_modifier.point_cache.use_disk_cache = True
                     
                 for child_collection in current_collection.children:
                     collection_stack.append(child_collection)
@@ -1312,7 +1322,27 @@ class BV2_OT_execute_cloth_settings(bpy.types.Operator):
         self.report({"INFO"},message="Sim Values EXECUTED")
         return {'FINISHED'} 
 
+class BV2_OT_bake_hair_sim(bpy.types.Operator):
+    bl_idname = "object.bake_hair_sim"
+    bl_label = "Bake Dynamics"
+    bl_description = "Bake all dynamics in the specified collection"
 
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def execute(self, context):
+        if bpy.context.scene.bv2_tools.sim_collection == "":
+            pass
+        else:
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[bpy.context.scene.bv2_tools.sim_collection].exclude = False
+            bpy.ops.ptcache.bake_all(bake=True)
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[bpy.context.scene.bv2_tools.sim_collection].exclude = True
+        self.report({"INFO"},message="SIM BAKE FINISHED")
+        return {'FINISHED'}
+    
+
+    
 #=========================================================================================================    
 # 01 ---------------------------   [TEMPLATE LIST IMPLIMENTATION]
 #=========================================================================================================  
@@ -1585,6 +1615,8 @@ class BV2_PT_bv2Properties(bpy.types.PropertyGroup):
         description="List of Sim Collections",)
     
     simToggle : bpy.props.BoolProperty(name="Sim Toggle",default=True)
+
+    disk_cache : bpy.props.BoolProperty(name="Disk Cache",default=False , description="Toggle disk Cache")
     
     simToggle_: bpy.props.EnumProperty(
         items=(('ON', "Sim On", "Turn simulation on"),
@@ -2654,9 +2686,11 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
                             grid_l.label(text = "Simulation Start")
                             grid_l.label(text = "               End")
+                            grid_l.label(text = "")
 
                             grid_r.prop(mytool, "sim_start", text = "")
                             grid_r.prop(mytool, "sim_end", text = "")
+                            grid_r.prop(mytool, "disk_cache", text = "Use Disk Cache")
 
                             col_cache = colSv.column()
                             col_cache.alignment = "RIGHT"
@@ -2711,7 +2745,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
                     rowSv = colSv.row()
                     rowSv.scale_y = 1.2
-                    rowSv.operator("ptcache.bake_all")
+                    #rowSv.operator("ptcache.bake_all")
+                    rowSv.operator("object.bake_hair_sim",text="Bake all Physics")
                     rowSv.operator("ptcache.free_bake_all")
                                
                 else:
@@ -2778,7 +2813,7 @@ bv2Classes = (BV2_UL_hair_curves, BV2_PT_bv2Properties, BV2_PT_bv2ExpandProp, BV
                 BV2_OT_exit_sculpt_mode, BV2_OT_create_sim_guides, BV2_OT_create_sculpt_guide, BV2_OT_single_user, 
                 BV2_OT_single_user_vts, BV2_OT_single_user_matt, BV2_OT_choose_nodeTree, BV2_OT_rename_nodeTree, BV2_OT_resample_guides,
                 BV2_OT_generate_guides, BV2_OT_add_empty_hair, BV2_OT_apply_guides, BV2_OT_delete_guides, BV2_OT_rescale_hair, 
-                BV2_OT_remove_sim_collection, BV2_OT_remove_empty_hair, BV2_OT_hide_hair_curve, BV2_OT_execute_cloth_settings,BV2_preferences)
+                BV2_OT_remove_sim_collection, BV2_OT_remove_empty_hair, BV2_OT_hide_hair_curve, BV2_OT_execute_cloth_settings,BV2_preferences,BV2_OT_bake_hair_sim)
                 
 
 def register():  
