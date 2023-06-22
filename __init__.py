@@ -644,7 +644,6 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             hc_obj.hide_select = True
             
             bpy.ops.object.select_all(action='DESELECT')
-            #bpy.context.collection.objects.link(hc_obj)
             bpy.context.view_layer.objects.active = hc_obj
             
             bpy.ops.object.editmode_toggle()
@@ -1416,7 +1415,7 @@ class BV2_UL_hair_curves(bpy.types.UIList):
             
             row = layout.row()
             row.prop(
-                curve_object, "name", text="", emboss=False,icon = "CURVES"
+                curve_object, "name", text="", emboss=False,icon = "OUTLINER_OB_CURVES"
             )
             sub_row = row.row(align=True)
             #sub_row.prop(curve_object, "hide_select", icon_only=True, emboss=False)
@@ -1843,7 +1842,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                 if has_curve_child(obj_ac):
                     row_label.label(text = obj_ac.name, icon = "OBJECT_DATAMODE")
                     row_label.label(text = "", icon = 'RIGHTARROW')
-                    row_label.label(text = obj.name, icon = "OUTLINER_DATA_CURVES")
+                    row_label.label(text = obj.name, icon = "OUTLINER_OB_CURVES")
                     #if get_gNode(obj)[2] == nodeID_1:
                     row_label.label(text = "", icon = 'RIGHTARROW')
                 else:
@@ -1853,12 +1852,12 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                 if get_gNode(obj)[2] == nodeID_1:
                     row_label.label(text = obj.parent.name, icon = "OBJECT_DATAMODE")
                     row_label.label(text = "", icon = 'RIGHTARROW')
-                    row_label.label(text = obj.name, icon = "OUTLINER_DATA_CURVES")
+                    row_label.label(text = obj.name, icon = "OUTLINER_OB_CURVES")
                     row_label.label(text = "", icon = 'RIGHTARROW')
                 else:
                     row_label.label(text = obj.parent.name, icon = "OBJECT_DATAMODE")
                     row_label.label(text = "", icon = 'RIGHTARROW')
-                    row_label.label(text = obj.name, icon = "OUTLINER_DATA_CURVES")
+                    row_label.label(text = obj.name, icon = "OUTLINER_OB_CURVES")
                     row_label.label(text = "", icon = 'RIGHTARROW')
 
             row_pin = row_main.row()
@@ -1945,7 +1944,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         gcMsCntr = obj.modifiers[-1].node_group.nodes["ID:bv2_GC_TM_01"].inputs[0]
                         gcMsNode = obj.modifiers[-1].node_group.nodes["ID:bv2_GC_TM_01"]
                         
-                        col_.label(text = "Generate Guide Curves:", icon = "CURVES")
+                        col_.label(text = "Generate Guide Curves:", icon = "OUTLINER_OB_CURVES")
                         row_ = col_.row(align = True)
                         row_.alignment = "RIGHT"
                         gcMsCntr.draw(context, col_, gcMsNode, text = '')
@@ -1978,9 +1977,9 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         col_.separator(factor=.4)
                         col_.scale_y = 1.6
                         row_ = col_.row(align = True)
-                        row_.operator("object.bv2_generate_guides", text = "Generate Guides", icon = "OUTLINER_DATA_CURVES", depress = True)
+                        row_.operator("object.bv2_generate_guides", text = "Generate Guides", icon = "OUTLINER_OB_CURVES", depress = True)
                         row_.separator(factor=1)
-                        row_.operator("object.bv2_resample_guides", text = "Resample Guides", icon = "OUTLINER_DATA_CURVES", depress = True)
+                        row_.operator("object.bv2_resample_guides", text = "Resample Guides", icon = "OUTLINER_OB_CURVES", depress = True)
                         col_.separator(factor=.4)
                         
                 #--------------------------------------------------------------------------------------------------------
@@ -2020,7 +2019,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
                         box_00 = col_.box()
                         col_c = box_00.column(align = False)
-                        col_c.label(text="Hair Children Type:",icon="CURVES_DATA")
+                        col_c.label(text="Hair Children Type:",icon = "OUTLINER_OB_CURVES")
 
                         row_c = col_c.row(align = True)
                         row_c.scale_y = 1.2
@@ -2209,7 +2208,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                     # HAIR STRANDS DRAWER
                     if obj_exp.my_exp2:
                         row1.prop(obj_exp, "my_exp2",icon="TRIA_DOWN", text="HAIR STRANDS", emboss=False)
-                        row1.label(text = "", icon = "OUTLINER_DATA_CURVES")
+                        row1.label(text = "", icon = "OUTLINER_OB_CURVES")
                         
                         box_00 = col1.box()
                         box_ = col1.box()
@@ -2324,7 +2323,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             fcr.prop(obj_exp, "my_expF2",icon="TRIA_RIGHT", text="Clump Profile", emboss=False)
                     else:
                         row1.prop(obj_exp, "my_exp2",icon="TRIA_RIGHT", text="HAIR STRANDS", emboss=False)
-                        row1.label(text = "", icon = "OUTLINER_DATA_CURVES")
+                        row1.label(text = "", icon = "OUTLINER_OB_CURVES")
                             
                         
                     #================================================================================================================
@@ -2349,8 +2348,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         mytool = context.scene.bv2_tools
                         #row_.prop(mytool, "curlType",expand = True)
                         #bgenMod(obj)["Input_57"]
-                        row_.prop(bgenMod, '["Input_57"]', text = 'Curl Type 1', expand = True, icon = "CURVES", invert_checkbox = True)
-                        row_.prop(bgenMod, '["Input_57"]', text = 'Curl Type 2', expand = True, icon = "CURVES")
+                        row_.prop(bgenMod, '["Input_57"]', text = 'Curl Type 1', expand = True, icon = "OUTLINER_OB_CURVES", invert_checkbox = True)
+                        row_.prop(bgenMod, '["Input_57"]', text = 'Curl Type 2', expand = True, icon = "OUTLINER_OB_CURVES")
                         
                         if obj.modifiers[bgenMod.name]["Input_57"] == False:
 
