@@ -362,7 +362,7 @@ class AddonUpdaterUpdateTarget(bpy.types.Operator):
         name="Clean install",
         description=("If enabled, completely clear the addon's folder before "
                      "installing new update, creating a fresh install"),
-        default=False,
+        default=True,
         options={'HIDDEN'}
     )
 
@@ -1405,7 +1405,7 @@ def register(bl_info):
     # update. If a pattern file is not found in new update, no action is taken
     # NOTE: This does NOT delete anything proactively, rather only defines what
     # is allowed to be overwritten during an update execution.
-    updater.overwrite_patterns = ["*.png", "*.jpg", "README.md", "LICENSE.txt"]
+    updater.overwrite_patterns = ["*.png", "*.jpg", "README.md", "LICENSE.txt","*.blend"]
     # updater.overwrite_patterns = []
     # other examples:
     # ["*"] means ALL files/folders will be overwritten by update, was the
