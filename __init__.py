@@ -1149,7 +1149,8 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
     
     def invoke(self, context, event):
         dirpath = os.path.dirname(os.path.realpath(__file__))
-        nodelib_path = os.path.join(dirpath, "bgen_v2_nodes.blend")
+        resource_folder = os.path.join(dirpath,"resources")
+        nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
 
         def load_node(nt_name, link=True):
             if not os.path.isfile(nodelib_path):
@@ -1163,9 +1164,16 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
 
         if "bgen_v2_nodes" not in bpy.data.node_groups:
             load_node("bgen_v2_nodes", link=False)
+        
+        if "00_bv2: [Resample Curve]" not in bpy.data.node_groups:
+            load_node("00_bv2: [Resample Curve]", link=False)
 
-        #if vts_mod_name_01 not in bpy.data.node_groups:
-        #    load_node(vts_mod_name_01, link=False)
+        if vts_mod_name_01 not in bpy.data.node_groups:
+            load_node(vts_mod_name_01, link=False)
+        
+        if stc_mod_name_01 not in bpy.data.node_groups:
+            load_node(stc_mod_name_01, link=False)
+            
         
         return context.window_manager.invoke_props_dialog(self)
     
