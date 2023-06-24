@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BGEN Groom",
     "author": "Munorr",
-    "version": (1, 1, 3),
+    "version": (1, 2, 0),
     "blender": (3, 5, 0),
     "location": "View3D > N",
     "description": "Control parameters from B-GEN v2 geometry node hair system",
@@ -13,6 +13,8 @@ bl_info = {
 import bpy
 import os
 import time
+
+from bpy.types import Context
 
 from . import addon_updater_ops
 from bpy.utils import previews
@@ -30,6 +32,11 @@ nodeID_1 = "ID:BV2_0001"
 nodeID_2 = "ID:B-GEN_0002"
 nodeID_3 = "ID:BV2_VtoS_0001"
 nodeID_4 = "ID:BV2_GEN_HC"
+
+bgen_groom_mod_01 = "bgen_groom_hair"
+vts_mod_name_01 = "00_bgen_vts"
+stc_mod_name_01 = "00_bgen_stc"
+bgen_hair_shader = "Bgen_Hair_Shader"
 
 def vts_nodes():
     vts = []
@@ -276,8 +283,10 @@ class BV2_OT_single_user_vts(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     
     def execute(self, context):
-        vts_ = bpy.data.node_groups[bpy.context.scene.bv2_tools.vts_mod].copy()
-        bpy.context.scene.bv2_tools.vts_mod = vts_.name
+        vts_ = bpy.data.collections[bpy.context.scene.bv2_tools.sim_collection].objects[0].modifiers[0].node_group.copy()
+        #vts_ = bpy.data.node_groups[bpy.context.scene.bv2_tools.vts_mod].copy()
+        bpy.data.collections[bpy.context.scene.bv2_tools.sim_collection].objects[0].modifiers[0].node_group = vts_
+        #bpy.context.scene.bv2_tools.vts_mod = vts_.name
         return{'FINISHED'}
     
 class BV2_OT_single_user_matt(bpy.types.Operator):
@@ -490,7 +499,55 @@ class BV2_OT_choose_nodeTree(bpy.types.Operator):
         org_mod = obj_.modifiers[node_group_name].node_group
         obj_.modifiers[node_group_name].node_group = bpy.data.node_groups[self.bv2_nodes]
         return{'FINISHED'}
+
+class BV2_OT_choose_vts_nodeTree(bpy.types.Operator):
+    """ Choose which bgen Node to use"""
+    bl_idname = "object.bv2_choose_vts_nodetree"
+    bl_label = "Choose vts Node"
+    bl_options = {'REGISTER', 'UNDO'}
     
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        if get_curveChild(active).type != "CURVES":
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    vts_nodes:bpy.props.EnumProperty(
+        items=lambda self, context: [(b.name, b.name, "") for b in bpy.data.node_groups for bn in b.nodes if bn.name == nodeID_3],
+        name="Change Modifier to:",
+        description="Select bgen modifier",)
+
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        bgenMod = get_gNode(obj)[0]
+        mod_sim_data = bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value.name
+        #sim_obj_vts = bpy.data.collections[mod_sim_data].objects[0].modifiers[0].node_group
+
+        bpy.data.collections[mod_sim_data].objects[0].modifiers[0].node_group = bpy.data.node_groups[self.vts_nodes]
+        return{'FINISHED'}
+        
 class BV2_OT_add_empty_hair(bpy.types.Operator):
     """ Add Empty hair curve """
     bl_idname = "object.bv2_add_ehc"
@@ -525,7 +582,7 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
         name="BV2 Hair Modifiers",
         description="Select bgen modifier",)
       
-    ng_name: bpy.props.StringProperty(name="Hair Mod name", description="Enter a name for the hair modifier", default="bgen_v2_")
+    ng_name: bpy.props.StringProperty(name="Hair Mod name", description="Enter a name for the hair modifier", default="bgen_groom_")
     
     '''   
     def invoke(self, context, event):
@@ -544,6 +601,7 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
                 if nt_name in data_from.node_groups:
                     data_to.node_groups = [nt_name]
                     return True
+            #data_to.node_groups.name
             return False
 
         def load_material(nt_name, link=True):
@@ -559,11 +617,11 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
         if "bgen_v2_nodes" not in bpy.data.node_groups:
             load_node("bgen_v2_nodes", link=False)
             
-        if "bgen_v2_hair" not in bpy.data.node_groups:
-            load_node("bgen_v2_hair", link=False)
+        if bgen_groom_mod_01 not in bpy.data.node_groups:
+            load_node(bgen_groom_mod_01, link=False)
 
-        if "BV2_Hair_Shader" not in bpy.data.materials:
-            load_material("BV2_Hair_Shader", link=False)
+        if bgen_hair_shader not in bpy.data.materials:
+            load_material(bgen_hair_shader, link=False)
 
         return context.window_manager.invoke_props_dialog(self)
     
@@ -624,10 +682,20 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             #------------------------------------------------------------------------------------------------
             if self.hairType == "NEW": #If new hair modifier
                 ''' Gets the geoNode hair modifier''' 
-                get_mod_01 = bpy.data.node_groups.get("bgen_v2_hair")
+                dirpath = os.path.dirname(os.path.realpath(__file__))
+                resource_folder = os.path.join(dirpath,"resources")
+                nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+                with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
+                    data_to.node_groups = [bgen_groom_mod_01]
+
+                appended_node_tree = data_to.node_groups[0]
+
+                #get_mod_01 = bpy.data.node_groups.get(bgen_groom_mod_01)
+                get_mod_01 = appended_node_tree
                 mod_01 = hc_obj.modifiers.new(name="geometry_nodes_mod", type='NODES')
                 mod_01.node_group = get_mod_01
-                mod_01.node_group = mod_01.node_group.copy()
+                #mod_01.node_group = mod_01.node_group.copy()
                 mod_01.node_group.name = self.ng_name
             else:
                 '''Uses existing one''' 
@@ -657,7 +725,215 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             self.report({"ERROR"},message="Not a mesh object")
             return {"CANCELLED"}
         return{'FINISHED'}
+
+class BV2_OT_add_bgen_groom(bpy.types.Operator):
+    """ Add Empty hair curve """
+    bl_idname = "object.add_bgen_groom"
+    bl_label = "Add BGEN groom"
+    bl_options = {'REGISTER', 'UNDO'}
     
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        if get_curveChild(active).type != "CURVES":
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if bpy.context.active_object.hair_curves_active_index < 0:
+            return False
+        if bpy.context.active_object.hair_curves_active_index:
+            if get_gNode(bpy.data.objects[bpy.context.active_object.hair_curves_active_index])[2] == nodeID_1:
+                return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    name: bpy.props.StringProperty(name="Curve Name", description="Enter a name for the new hair curve", default="hair_")
+    
+    hairType: bpy.props.EnumProperty(
+        items=(('EXISTING', "Use Existing", "Use existing bgen modifier"),
+               ('NEW', "Create New", "Create with new hair modifier")),
+        default='EXISTING',)
+    
+    bv2_nodes:bpy.props.EnumProperty(
+        items=lambda self, context: [(b.name, b.name, "") for b in bpy.data.node_groups for bn in b.nodes if bn.name == "ID:BV2_0001"],
+        name="BV2 Hair Modifiers",
+        description="Select bgen modifier",)
+      
+    ng_name: bpy.props.StringProperty(name="Hair Mod name", description="Enter a name for the hair modifier", default="bgen_groom_")
+    
+    '''   
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self) '''
+    
+    def invoke(self, context, event):
+        dirpath = os.path.dirname(os.path.realpath(__file__))
+        resource_folder = os.path.join(dirpath,"resources")
+        nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+        def load_node(nt_name, link=True):
+            if not os.path.isfile(nodelib_path):
+                return False
+
+            with bpy.data.libraries.load(nodelib_path, link=link) as (data_from, data_to):
+                if nt_name in data_from.node_groups:
+                    data_to.node_groups = [nt_name]
+                    return True
+            #data_to.node_groups.name
+            return False
+
+        def load_material(nt_name, link=True):
+            if not os.path.isfile(nodelib_path):
+                return False
+
+            with bpy.data.libraries.load(nodelib_path, link=link) as (data_from, data_to):
+                if nt_name in data_from.materials:
+                    data_to.materials = [nt_name]
+                    return True
+            return False
+        
+        if "bgen_v2_nodes" not in bpy.data.node_groups:
+            load_node("bgen_v2_nodes", link=False)
+            
+        if bgen_groom_mod_01 not in bpy.data.node_groups:
+            load_node(bgen_groom_mod_01, link=False)
+
+        if bgen_hair_shader not in bpy.data.materials:
+            load_material(bgen_hair_shader, link=False)
+
+        return context.window_manager.invoke_props_dialog(self)
+    
+    def draw(self, context):
+        
+        layout = self.layout
+        col = layout.column()
+        col_ = col.column()
+        col_.scale_y = 1.2
+        col_.prop(self,"name")
+        col_.separator()
+        
+        box = col.box()
+        col_ = box.column()
+        col_.scale_y = 1.6
+        row_ = col_.row()
+        
+        row_.prop(self,"hairType", expand = True)
+        if self.hairType == "EXISTING":
+            row_ = col_.row()
+            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+            grid_l.alignment = "RIGHT"
+            grid_l.scale_x = 1.1
+            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+            
+            grid_l.label(text = "Hair Modifiers")
+            grid_r.prop(self,"bv2_nodes", text = "")
+        else:
+            row_ = col_.row()
+            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+            grid_l.alignment = "RIGHT"
+            grid_l.scale_x = 1.1
+            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+            
+            grid_l.label(text = "Name Modifier")
+            grid_r.prop(self,"ng_name", text = "")
+            
+    def execute(self, context):
+        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        obj_parent = bpy.data.objects[bpy.context.active_object.hair_curves_active_index].parent
+
+        if obj.type == "CURVES":
+            #Create new empty curve
+            #------------------------------------------------------------------------------------------------
+            uv_name = obj_parent.data.uv_layers.active.name
+            #bpy.ops.object.curves_empty_hair_add(align='WORLD', location=(x, y, z), scale=(1, 1, 1))
+            hc_obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            #hc_obj = bpy.context.active_object  #hair curve object
+            bpy.context.view_layer.objects.active = hc_obj
+            #------------------------------------------------------------------------------------------------
+            #Remove empty curve modifiers and make active
+            #------------------------------------------------------------------------------------------------
+            while hc_obj.modifiers:
+               hc_obj.modifiers.remove(hc_obj.modifiers[0])
+            hc_obj.name = self.name
+            #bpy.ops.object.location_clear(clear_delta=False)
+            bpy.context.view_layer.objects.active = hc_obj.parent
+            #------------------------------------------------------------------------------------------------
+            if self.hairType == "NEW": #If new hair modifier
+                ''' Gets the geoNode hair modifier''' 
+                dirpath = os.path.dirname(os.path.realpath(__file__))
+                resource_folder = os.path.join(dirpath,"resources")
+                nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+                with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
+                    data_to.node_groups = [bgen_groom_mod_01]
+
+                appended_node_tree = data_to.node_groups[0]
+
+                #get_mod_01 = bpy.data.node_groups.get(bgen_groom_mod_01)
+                get_mod_01 = appended_node_tree
+                mod_01 = hc_obj.modifiers.new(name="geometry_nodes_mod", type='NODES')
+                mod_01.node_group = get_mod_01
+                #mod_01.node_group = mod_01.node_group.copy()
+                mod_01.node_group.name = self.ng_name
+            else:
+                '''Uses existing one''' 
+                mod_01 = hc_obj.modifiers.new(name="geometry_nodes_mod", type='NODES')
+                mod_01.node_group = bpy.data.node_groups[self.bv2_nodes]
+            
+            modName = get_gNode(hc_obj)[0].name
+            hc_obj.modifiers[modName]["Input_41"] = uv_name
+            hc_obj.modifiers[modName]["Input_14"] = hc_obj.parent
+            #hc_obj.modifiers[modName]["Input_47"] = True
+            #hc_obj.modifiers[modName]["Input_46"] = hg_obj
+            hc_obj.modifiers[modName]["Input_2"] = False
+            
+            hc_obj.hide_select = True
+            
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.view_layer.objects.active = hc_obj
+            
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.curves.sculptmode_toggle()
+            
+            bpy.context.object.hair_curves_active_index = get_hair_curves_active_index(hc_obj)
+            
+            
+        else:
+            self.report({"ERROR"},message="Not a hair curve object")
+            return {"CANCELLED"}
+        return{'FINISHED'}
+
+class BV2_OT_remove_bgen_groom(bpy.types.Operator):
+    """ Add Empty hair curve """
+    bl_idname = "object.remove_bgen_groom"
+    bl_label = "Remove BGEN groom"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if bpy.context.active_object.hair_curves_active_index:
+            if get_gNode(bpy.data.objects[bpy.context.active_object.hair_curves_active_index])[2] != nodeID_1:
+                return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    def execute(self, context):
+        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        if obj.modifiers:
+            for modifier in obj.modifiers:
+                if get_gNode(obj)[2] == nodeID_1:
+                    obj.modifiers.remove(modifier)
+
+        self.report({"INFO"},message="Modifiers deleted")
+        return{'FINISHED'}
+
 class BV2_OT_remove_empty_hair(bpy.types.Operator):
     """ Deletes Higlighted hair curve """
     bl_idname = "object.bv2_remove_ehc"
@@ -849,13 +1125,28 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             return False
         if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
             return False
+        
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        bgenMod = get_gNode(obj)[0]
+        if not bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value is None:
+            return False
         return context.mode == "OBJECT" 
     
-    '''
-    def invoke(self, context, event):
-        # Display a popup asking for the collection name
-        return context.window_manager.invoke_props_dialog(self)
-    '''
     def invoke(self, context, event):
         dirpath = os.path.dirname(os.path.realpath(__file__))
         nodelib_path = os.path.join(dirpath, "bgen_v2_nodes.blend")
@@ -873,8 +1164,8 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
         if "bgen_v2_nodes" not in bpy.data.node_groups:
             load_node("bgen_v2_nodes", link=False)
 
-        if "00_bv2: [Vertex To Strip]" not in bpy.data.node_groups:
-            load_node("00_bv2: [Vertex To Strip]", link=False)
+        #if vts_mod_name_01 not in bpy.data.node_groups:
+        #    load_node(vts_mod_name_01, link=False)
         
         return context.window_manager.invoke_props_dialog(self)
     
@@ -898,14 +1189,24 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             
             convert_to_mesh(obj,self.resolution)  # Used method to convert to mesh
             obj = bpy.context.active_object
-            
+            obj.name = "SIM=[" + obj_.name + "]"
             obj_.hide_select = True
             #--------------------------------------------------------------------------
-            # add modifiers
-            get_mod_01 = bpy.data.node_groups.get("00_bv2: [Vertex To Strip]")
+            ''' Gets VTS modifier from resouorce file''' 
+            dirpath = os.path.dirname(os.path.realpath(__file__))
+            resource_folder = os.path.join(dirpath,"resources")
+            nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+            with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
+                data_to.node_groups = [vts_mod_name_01]
+
+            appended_node_tree = data_to.node_groups[0]
+            get_mod_01 = appended_node_tree
             mod_01 = obj.modifiers.new(name="geometry_nodes_mod", type='NODES')
             mod_01.node_group = get_mod_01
-            
+            mod_01.node_group.name = obj.name
+            #--------------------------------------------------------------------------
+
             mod_02 = obj.modifiers.new(name="Cloth", type='CLOTH')
             # Remove all vertex groups from the object
             for group in obj.vertex_groups:
@@ -924,26 +1225,15 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
                 #cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
             else:
                 cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
+            #--------------------------------------------------------------------------
             
-            
-            
-            get_mod_03 = bpy.data.node_groups.get("00_bv2: [Strips To Curves]")
+            get_mod_03 = bpy.data.node_groups.get(stc_mod_name_01)
             mod_03 = obj.modifiers.new(name="geometry_nodes_mod", type='NODES')
             mod_03.node_group = get_mod_03
-            
-
-            
-            # Separate each strand
-            bpy.ops.object.editmode_toggle()
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.separate(type='LOOSE')
-            bpy.ops.object.editmode_toggle()
 
             new_collection = bpy.data.collections.new("")
-
-            # Add the new collection to the active scene
             bpy.context.scene.collection.children.link(new_collection)
-            
+
             # Add all selected objects to the new collection
             selected_objects = bpy.context.selected_objects
             for obj in selected_objects:
@@ -957,14 +1247,13 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             
             bpy.context.view_layer.objects.active = obj_
             new_collection.name = "SIM=[" + obj_.name + "]"
-            
+
+            #--------------------------------------------------------------------------
             if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].children:
                 obj0 = bpy.data.objects[bpy.context.active_object.hair_curves_active_index].children[0]
             else:
                 obj0 = bpy.data.objects[bpy.context.active_object.hair_curves_active_index] 
-                
-            #obj0 = bpy.data.objects[self.sim_target]
-            
+
             mod_name = get_gNode(obj0)[0]
             nodeTree_name = get_gNode(obj0)[1]
 
@@ -1069,6 +1358,7 @@ class BV2_OT_groom_curve(bpy.types.Operator):
     """Switches to sculpt curve object"""
     bl_idname = "object.bv2_groom_curve"
     bl_label = "Sculpt curve"
+    #bl_options = {'REGISTER', 'UNDO'}
     
     @classmethod
     def poll(cls, context):
@@ -1332,18 +1622,49 @@ class BV2_OT_bake_hair_sim(bpy.types.Operator):
     def poll(cls, context):
         return context.mode == 'OBJECT'
 
+    
     def execute(self, context):
         if bpy.context.scene.bv2_tools.sim_collection == "":
             pass
         else:
-            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[bpy.context.scene.bv2_tools.sim_collection].exclude = False
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                obj_exp = context.object.bv2_expand
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            bgenMod = get_gNode(obj)[0]
+            mod_sim_data = bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value.name
+
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[mod_sim_data].exclude = False
             bpy.ops.ptcache.bake_all(bake=True)
-            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[bpy.context.scene.bv2_tools.sim_collection].exclude = True
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[mod_sim_data].exclude = True
         self.report({"INFO"},message="SIM BAKE FINISHED")
         return {'FINISHED'}
-    
 
-    
+class BV2_MT_operator_menu(bpy.types.Menu):
+    bl_label = "BGEN operator menu"
+
+    def draw(self, _context):
+        layout = self.layout
+        col = layout.column()
+        col.scale_y = 1.4
+        col.operator("object.bv2_duplicate_hair", text="Duplicate Hair", icon = "DUPLICATE")
+        col.operator("object.bv2_rescale_hair", text="Rescale Hair", icon = "TOOL_SETTINGS")
+        col.operator("object.add_bgen_groom", text="Add BGEN groom mod", icon = "ADD")
+        col.operator("object.remove_bgen_groom", text="Remove BGEN groom", icon = "REMOVE")
+        
+
 #=========================================================================================================    
 # 01 ---------------------------   [TEMPLATE LIST IMPLIMENTATION]
 #=========================================================================================================  
@@ -1624,6 +1945,14 @@ class BV2_PT_bv2Properties(bpy.types.PropertyGroup):
                ('OFF', "Sim Off", "Turn simulation off")),
         default='ON')
     
+    vp_amount: bpy.props.EnumProperty(
+        items=(('10', "10%", "10% Viewport amount"),
+               ('25', "25%", "25% Viewport amount"),
+               ('50', "50%", "50% Viewport amount"),
+               ('75', "75%", "75% Viewport amount"),
+               ('100', "100%", "100% Viewport amount")),
+        default='100')
+    
 class BV2_PT_bv2ExpandProp(bpy.types.PropertyGroup):
     
     my_exp1 : bpy.props.BoolProperty(default=False) # INITIALIZE
@@ -1636,6 +1965,8 @@ class BV2_PT_bv2ExpandProp(bpy.types.PropertyGroup):
     my_exp8 : bpy.props.BoolProperty(default=False) # EXTRA SETTINGS
     my_exp9 : bpy.props.BoolProperty(default=False) # Parting Map
     my_exp10 : bpy.props.BoolProperty(default=False) # Bake to Cache Settings
+    my_exp11 : bpy.props.BoolProperty(default=False) # Collision Settings
+    my_exp12 : bpy.props.BoolProperty(default=False) # Sim Values
     
     my_expF1 : bpy.props.BoolProperty(default=False)
     my_expF2 : bpy.props.BoolProperty(default=False) 
@@ -1643,6 +1974,7 @@ class BV2_PT_bv2ExpandProp(bpy.types.PropertyGroup):
     my_expF4 : bpy.props.BoolProperty(default=False) # BRAID
     my_expF5 : bpy.props.BoolProperty(default=False)
     my_expF5 : bpy.props.BoolProperty(default=False) # NOISE
+    my_expF6 : bpy.props.BoolProperty(default=False) # Noise Profile
     
     my_expS1 : bpy.props.BoolProperty(default=False) # Weight Paint
     my_expS2 : bpy.props.BoolProperty(default=False) # Sim Values
@@ -1771,9 +2103,11 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             col00.operator("object.bv2_add_ehc", text="", icon = "ADD")  
             col00.operator("object.bv2_remove_ehc", text="", icon = "REMOVE")
             col00.separator()
-            col00.operator("object.bv2_duplicate_hair", text="", icon = "DUPLICATE")
-            col00.separator()
-            col00.operator("object.bv2_rescale_hair", text="", icon = "TOOL_SETTINGS")
+            #col00.operator("object.bv2_duplicate_hair", text="", icon = "DUPLICATE")
+            #col00.separator()
+            #col00.operator("object.bv2_rescale_hair", text="", icon = "TOOL_SETTINGS")
+            col00.menu("BV2_MT_operator_menu",text="",icon='DOWNARROW_HLT')
+            
             
 
             row_0.operator("object.bv2_groom_curve", text="GROOM", icon = "SCULPTMODE_HLT")
@@ -1895,9 +2229,11 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             col00.operator("object.bv2_add_ehc", text="", icon = "ADD")  
             col00.operator("object.bv2_remove_ehc", text="", icon = "REMOVE")
             col00.separator()
-            col00.operator("object.bv2_duplicate_hair", text="", icon = "DUPLICATE")
-            col00.separator()
-            col00.operator("object.bv2_rescale_hair", text="", icon = "TOOL_SETTINGS")
+            #col00.operator("object.bv2_duplicate_hair", text="", icon = "DUPLICATE")
+            #col00.separator()
+            #col00.operator("object.bv2_rescale_hair", text="", icon = "TOOL_SETTINGS")
+            col00.menu("BV2_MT_operator_menu",text="",icon='DOWNARROW_HLT')
+            
             
 
             row_0.operator("object.bv2_groom_curve", text="GROOM", icon = "SCULPTMODE_HLT")
@@ -1918,9 +2254,11 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             col = layout.column()
             ubox = col.box()
             col = ubox.column()
-            urow = col.row()
-            
+            urow = col.row(align=True)
+            urow.scale_x = 1.2
             urow.prop(bv2_tools, "utilDrawer",expand = True)
+            if mainCurve and get_gNode(obj)[2] == "ID:BV2_0001":
+                urow.prop(bgenMod, '["Input_42"]', text = '', icon = "RADIOBUT_ON")
             urow.scale_y = 1.4
             #utilD = bpy.context.scene.bv2_tools.utilDrawer
     
@@ -2232,10 +2570,12 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_l.scale_x = 1.3
                             grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
                             
+                            #grid_l.label(text = "     *Viewport Amount")
                             grid_l.label(text = "      Viewport Amount")
                             grid_l.label(text = "Interpulation Amount")
                             
-
+                            #row_vp = grid_r.row()
+                            #row_vp.prop(bv2_tools, "vp_amount",expand=True)
                             grid_r.prop(bgenMod, '["Input_12"]', text = '')
                             grid_r.prop(bgenMod, '["Input_8"]', text = '')
                             
@@ -2485,6 +2825,19 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         fcc = col1.box()
                         fcr = fcc.row()
                         fcc.scale_x = 1.2
+                        if 'bv2_Float_NOISE_01' in bpy.data.node_groups[bgenModName].nodes:
+                            fc_noise_01 = bpy.data.node_groups[bgenModName].nodes['bv2_Float_NOISE_01']
+                            if obj_exp.my_expF6:
+                                fcr.prop(obj_exp, "my_expF6",icon="TRIA_DOWN", text="Noise Profile", emboss=False)
+                                fcr.label(text="",icon="MOD_NOISE")
+                                fc_noise_01.draw_buttons_ext(context, fcc)
+                            else:
+                                fcr.prop(obj_exp, "my_expF6",icon="TRIA_RIGHT", text="Noise Profile", emboss=False)
+                                fcr.label(text="",icon="MOD_NOISE")
+                            
+                        fcc = col1.box()
+                        fcr = fcc.row()
+                        fcc.scale_x = 1.2
                         if obj_exp.my_expF5:
                             fcr.prop(obj_exp, "my_expF5",icon="TRIA_DOWN", text="Fly Away Strands", emboss=False)
                             fcr.prop(bgenMod, '["Input_53"]', text = '')
@@ -2555,210 +2908,184 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                 #main_obj = obj.name
                 
                 #----------------------------------------------------------------------------------------------------------------
-                #col = layout.column()
-                cols = col.column(align = True)
-                cols.scale_y = 1.6
+                col = col.column(align=True)
+                boxsg = col.box()
+                rowsg = boxsg.row(align = True)
+                boxsg_l = rowsg.box()
+                cols = boxsg_l.column(align = True)
+                cols.scale_y = 1.4
                 cols.operator("object.bv2_create_sim_guides", text="Create Sim Guides", icon = "FORCE_WIND", depress = True)
                 
-                box_ = col.box()
-                sgCol = box_.column(align = False)
-                sgCol.scale_y = 1.4
-                sgRow = sgCol.row()
-                    
-                scrow = sgCol.row(align = True, heading = "")
+                scrow = cols.row(align = True)
                 scrow.scale_x = 1.2
-                
                 scrow.prop(bv2_tools, "sim_collection", text = "", icon = "COLLECTION_COLOR_05")
                 scrow.operator("object.bv2_remove_sim_collection", text="", icon = "CANCEL")
-                #simCol = bpy.data.materials[bpy.context.scene.bv2_tools.sim_collection]
-                    
+                #------------------------------------------------------------------------------------
+                boxsg_l = rowsg.box()
+                sgCol = boxsg_l.column(align = True)
+                sgCol.scale_x = 1.2 
+                sgCol.scale_y = 1.4  
+
                 if mainCurve and get_gNode(obj)[2] == "ID:BV2_0001":
                     collCntr = bpy.data.node_groups[bgenModName].nodes["ID:bv2_CC_001"].inputs[1]
                     collNode = bpy.data.node_groups[bgenModName].nodes["ID:bv2_CC_001"] 
                     
-                    #sgRow = col.row(align = True)
-                    sgRow.prop(bgenMod, '["Input_2"]', text = 'Use Sim Guides')
-                    collCntr.draw(context, sgRow, collNode, text = '')
+                    sgCol.prop(bgenMod, '["Input_2"]', text = 'Use Sim Guides',icon = "OUTLINER_OB_CURVES",expand=True)
+                    collCntr.draw(context, sgCol, collNode, text = '')
                 #----------------------------------------------------------------------------------------------------------------
-            
+
                 
-                
-                box = col.box()
-                col1 = box.column()
-                col1.scale_y = 1.2
-                row1 = col1.row()
-                if obj_exp.my_exp7:
-                    row1.prop(obj_exp, "my_exp7",icon="TRIA_DOWN", text="HAIR SIM", emboss=False)
-                    row1.label(text = "", icon = "OUTLINER_OB_POINTCLOUD")
-                    col_ = col1.column()
-                    col_.scale_y = 1.4
-                    vbox = col_.box()
-                    vcol = vbox.column()
-                    vcol.scale_x = 1.2
-                    vrow = vcol.row(align = True)
-                    
-                    #bpy.context.scene.bv2_tools.vts_mod = 'ID:BV2_VtoS_0001'
-                    #vtsNode = bpy.data.node_groups["00_bv2: [Vertex To Strip]"].name
-                    try:
-                        vtsNode = bpy.data.node_groups[bpy.context.scene.bv2_tools.vts_mod].name
-                        swCntr = bpy.data.node_groups[vtsNode].nodes["ID:bv2_SW_001"].inputs[4]
-                        swNode = bpy.data.node_groups[vtsNode].nodes["ID:bv2_SW_001"]
-                    
-                        #bpy.ops.node.new_geometry_node_group_assign()
+                if not bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value is None:
+                    if bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value.name[:4] == "SIM=":
+                        col = layout.column(align=True)
+                        ubox = col.box()
+                        col = ubox.column()
+
+                        box = col.box()
+                        vcol = box.column()
+                        vcol.scale_x = 1.6
+                        vcol.scale_y = 1.8
+                        vrow = vcol.row(align = True)
                         
-                        vrow.prop(myTools, "vts_mod", text = "", icon = "NODETREE", icon_only = True)
-                        vts_ = bpy.data.node_groups[bpy.context.scene.bv2_tools.vts_mod]
-                        vrow.prop(vts_,"name", text = "",toggle=True, emboss = True)
-                        vrow.prop(vts_,"use_fake_user", text = "",toggle=True, emboss = True)
+
+                        mod_sim_data = bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value.name
+                        sim_obj_vts = bpy.data.collections[mod_sim_data].objects[0].modifiers[0].node_group
+                        sim_obj_data = bpy.data.collections[mod_sim_data].objects[0].modifiers["Cloth"]
+
+                        #sim_obj_vts = bpy.data.node_groups[bpy.context.scene.bv2_tools.vts_mod]
+                        vrow.operator_menu_enum("object.bv2_choose_vts_nodetree",'vts_nodes', text="" , icon = "NODETREE")
+                        #vrow.prop(myTools, "vts_mod", text = "", icon = "NODETREE", icon_only = False)
+                        vrow.prop(sim_obj_vts,"name", text = "",toggle=True, emboss = True)
+                        vrow.prop(sim_obj_vts,"use_fake_user", text = "",toggle=True, emboss = True)
                         vrow.operator("object.bv2_single_user_vts", text="", icon = "DUPLICATE")
-                    except:
-                        vrow.label(text = "[VTS NODE NOT AVIALABLE]")
-                    
-                    row_ = col_.row()
-                    grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
-                    grid_l.alignment = "RIGHT"
-                    grid_l.scale_x = 1.1
-                    grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
-                        
-                    
-                    grid_l.label(text = "       Sim Collection:", icon = "COLLECTION_COLOR_05")
-                    grid_l.label(text = "Collision Collection:", icon = "COLLECTION_COLOR_01")
-                    
-                    grid_r.prop(mytool, "sim_collection", text = "")
-                    grid_r.prop(mytool, "col_collection", text = "")
-                    
-                    
-                    
-                    try:
-                        fc_wp = bpy.data.node_groups[vtsNode].nodes['Vertex_Paint_FC'] 
-                    except:
-                        pass
-                    
-                    #[Weight Paint Float Curve]
-                    col_ = col1.column()
-                    fcc = col1.box()
-                    fcr = fcc.row()
-                    
-                    if obj_exp.my_expS1:
-                        fcr.prop(obj_exp, "my_expS1",icon="TRIA_DOWN", text="Weigth Paint", emboss=False)
-                        try:
-                            fc_wp.draw_buttons_ext(context, fcc)
-                        except:
-                            fcc.label(text = "[VTS NODE NOT AVIALABLE]")
-                    
-                    else:
-                        fcr.prop(obj_exp, "my_expS1",icon="TRIA_RIGHT", text="Weigth Paint", emboss=False)
-                        
 
-                    boxSv = col1.box()
-                    colSv = boxSv.column(align = False)
-                    colSv.scale_y = 1.2
-                    rowSv = colSv.row()
-                    
-                    if obj_exp.my_expS2:
-                        rowSv.prop(obj_exp, "my_expS2",icon="TRIA_DOWN", text="Sim Values", emboss=False)
-                        row_ = colSv.row()
-                        grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
-                        grid_l.alignment = "RIGHT"
-                        grid_l.scale_x = 1.8
-                        grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                        boxSv = col.box()
+                        colSv = boxSv.column(align = True)
+                        colSv.scale_y = 1.2
+                        rowSv = colSv.row(align = True)
+                        rowSv.scale_x = 1.2
+                        
+                        if obj_exp.my_expS2:
+                            rowSv.prop(obj_exp, "my_expS2",icon="TRIA_DOWN", text="Simulation Settings", emboss=False)
+                            rowSv.prop(sim_obj_data, "show_viewport", text = "")
+                            rowSv.prop(sim_obj_data, "show_render", text = "")
+
+                            boxss = colSv.box()
+                            colss = boxss.column(align = False)
+                            colss.scale_y = 1
+                            rowss = colss.row(align = True)
+                            rowss.scale_x = 1.2
+                            rowss.alignment = "LEFT"
+                            if obj_exp.my_expS1:
+                                rowss.prop(obj_exp, "my_expS1",icon="DOWNARROW_HLT", text="Weigth Paint", emboss=False)
+                                try:
+                                    fc_wp = bpy.data.node_groups[sim_obj_vts.name].nodes['Vertex_Paint_FC'] 
+                                    fc_wp.draw_buttons_ext(context, colss)
+                                except:
+                                    colss.label(text = "[VTS NODE NOT AVIALABLE]")
                             
-                        grid_l.label(text = "      Quality")
-                        grid_l.label(text = "Air Viscusity")
-                        grid_l.label(text = "         Mass")
-                        grid_l.label(text = "      Gravity")
-                        grid_l.label(text = "      Tension")
-                        grid_l.separator()
-
-                        grid_r.prop(mytool, "my_int1", text = "")
-                        grid_r.prop(mytool, "my_float6", text = "")
-                        grid_r.prop(mytool, "my_float1", text = "")
-                        grid_r.prop(mytool, "my_float2", text = "")
-                        grid_r.prop(mytool, "my_float3", text = "")
-
-                        if obj_exp.my_exp10:
-                            colSv.prop(obj_exp, "my_exp10",icon="TRIA_DOWN", text="Bake to Cache Settings", emboss=False)
-                            row_ = colSv.row(align = False)
-
-                            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
-                            grid_l.alignment = "RIGHT"
-                            grid_l.scale_x = 1.3
-                            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
-
-                            grid_l.label(text = "Simulation Start")
-                            grid_l.label(text = "               End")
-                            grid_l.label(text = "")
-
-                            grid_r.prop(mytool, "sim_start", text = "")
-                            grid_r.prop(mytool, "sim_end", text = "")
-                            grid_r.prop(mytool, "disk_cache", text = "Use Disk Cache")
-
-                            col_cache = colSv.column()
-                            col_cache.alignment = "RIGHT"
-                            if bpy.context.scene.bv2_tools.sim_collection != "":
-                                sim_obj_data = bpy.data.collections[bpy.context.scene.bv2_tools.sim_collection].objects[0]
-                                for mod in sim_obj_data.modifiers:
-                                    if mod.type == "CLOTH":
-                                        cache_data = sim_obj_data.modifiers["Cloth"].point_cache
-                                        col_cache.label(text = cache_data.info)
                             else:
-                                pass
+                                rowss.prop(obj_exp, "my_expS1",icon="RIGHTARROW", text="Weigth Paint", emboss=False)
+
+                            boxss = colSv.box()
+                            colss = boxss.column(align = False)
+                            colss.scale_y = 1
+                            rowss = colss.row(align = True)
+                            rowss.scale_x = 1.2
+                            rowss.alignment = "LEFT"
+                            if obj_exp.my_exp12:
+                                rowss.prop(obj_exp, "my_exp12",icon="DOWNARROW_HLT", text="Sim Values", emboss=False)
+                                row_ = colss.row()
+                                row_.scale_y = 1.2
+                                grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                grid_l.alignment = "RIGHT"
+                                grid_l.scale_x = 1.8
+                                grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                    
+                                grid_l.label(text = "      Quality")
+                                grid_l.label(text = "Air Viscusity")
+                                grid_l.label(text = "         Mass")
+                                grid_l.label(text = "      Gravity")
+                                grid_l.label(text = "      Tension")
+
+                                grid_r.prop(sim_obj_data.settings, "quality", text = "")
+                                grid_r.prop(sim_obj_data.settings, "air_damping", text = "")
+                                grid_r.prop(sim_obj_data.settings, "mass", text = "")
+                                grid_r.prop(sim_obj_data.settings.effector_weights, "gravity", text = "")
+                                grid_r.prop(sim_obj_data.settings, "tension_stiffness", text = "")
+
+
+                            else:
+                                rowss.prop(obj_exp, "my_exp12",icon="RIGHTARROW", text="Sim Values", emboss=False)
+
+                            
+                            boxss = colSv.box()
+                            colss = boxss.column(align = False)
+                            colss.scale_y = 1
+                            rowss = colss.row(align = True)
+                            rowss.scale_x = 1.2
+                            rowss.alignment = "LEFT"
+                            if obj_exp.my_exp11:
+                                rowss.prop(obj_exp, "my_exp11",icon="DOWNARROW_HLT", text="Collision Settings", emboss=False)
+                                row_ = colss.row(align = False)
+
+                                grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                                grid_l.alignment = "RIGHT"
+                                grid_l.scale_x = 1.6
+                                grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+
+                                grid_l.label(text = "Collision Collection")
+
+                                grid_r.prop(sim_obj_data.collision_settings, "collection", text = "")
+
+                            else:
+                                rowss.prop(obj_exp, "my_exp11",icon="RIGHTARROW", text="Collision Settings", emboss=False)
+
+
+                            boxss = colSv.box()
+                            colss = boxss.column(align = False)
+                            colss.scale_y = 1
+                            rowss = colss.row(align = True)
+                            rowss.scale_x = 1.2
+                            rowss.alignment = "LEFT"
+                            if obj_exp.my_exp10:
+                                rowss.prop(obj_exp, "my_exp10",icon="DOWNARROW_HLT", text="Bake to Cache Settings", emboss=False)
+                                row_ = colss.row(align = False)
+
+                                grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                                grid_l.alignment = "RIGHT"
+                                grid_l.scale_x = 1.6
+                                grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+
+                                grid_l.label(text = "Simulation Start")
+                                grid_l.label(text = "               End")
+                                grid_l.label(text = "")
+                                
+                                grid_r.prop(sim_obj_data.point_cache, "frame_start", text = "")
+                                grid_r.prop(sim_obj_data.point_cache, "frame_end", text = "")
+                                grid_r.prop(sim_obj_data.point_cache, "use_disk_cache", text = "Use Disk Cache")
+
+                                colss.prop(sim_obj_data.point_cache, "info", text = "")
+                                rowss = colss.row()
+                                rowss.scale_y = 1.4
+                                rowss.operator("object.bake_hair_sim",text="Bake all Physics")
+                                if sim_obj_data.point_cache.is_baked == True:
+                                    rowss.operator("ptcache.free_bake_all",depress=True)
+                                else:
+                                    rowss.operator("ptcache.free_bake_all",depress=False)
+
+
+                            else:
+                                rowss.prop(obj_exp, "my_exp10",icon="RIGHTARROW", text="Bake to Cache Settings", emboss=False)
+
+                            
 
                         else:
-                            colSv.prop(obj_exp, "my_exp10",icon="TRIA_RIGHT", text="Bake to Cache Settings", emboss=False)
-                        
-                        
-  
-                    else:
-                        rowSv.prop(obj_exp, "my_expS2",icon="TRIA_RIGHT", text="Sim Values", emboss=False)
-                    
-                    colSv = boxSv.column()
-                    rowSv = colSv.row(align = False)
-                    
-                    colsm = colSv.column(align=False)
-                    rowsm = colsm.row()
-                    colsm.scale_y = 1.8
-                    rowsm.scale_y = .6
-                    rowsm.prop(mytool, "simToggle_", expand = True)
-                    colsm.operator('object.bv2_execute_cloth_settings')
-                    
-                    #col1.label(text = 'Simulation Cache')
-                    boxSv = col1.box()
-                    colSv = boxSv.column(align = False)
-                    colSv.scale_y = 1.2
-
-                    scene = bpy.context.scene
-                    frame_count = scene.frame_end - scene.frame_start + 1
-
-                    row_ = colSv.row()
-                    
-                    col_cache = colSv.column()
-                    col_cache.alignment = "RIGHT"
-                    if bpy.context.scene.bv2_tools.sim_collection != "":
-                        sim_obj_data = bpy.data.collections[bpy.context.scene.bv2_tools.sim_collection].objects[0]
-                        for mod in sim_obj_data.modifiers:
-                            if mod.type == "CLOTH":
-                                cache_data = sim_obj_data.modifiers["Cloth"].point_cache
-                                col_cache.label(text = "Current baking cache starts at [" + 
-                                                str(cache_data.frame_start) + "] and ends at frame [" + str(cache_data.frame_end)+"]")
-                    else:
-                        pass
-
-                    rowSv = colSv.row()
-                    rowSv.scale_y = 1.2
-                    #rowSv.operator("ptcache.bake_all")
-                    rowSv.operator("object.bake_hair_sim",text="Bake all Physics")
-                    rowSv.operator("ptcache.free_bake_all")
-                               
-                else:
-                    row1.prop(obj_exp, "my_exp7",icon="TRIA_RIGHT", text="HAIR SIM", emboss=False)
-                    row1.label(text = "", icon = "OUTLINER_DATA_POINTCLOUD")
-                
-                
-    
-        #except:
-        #    pass
-        #    print("An error occurred:")
+                            rowSv.prop(obj_exp, "my_expS2",icon="TRIA_RIGHT", text="Simulation Settings", emboss=False)
+                            rowSv.prop(sim_obj_data, "show_viewport", text = "")
+                            rowSv.prop(sim_obj_data, "show_render", text = "")
+          
+        
               
 @addon_updater_ops.make_annotations
 class BV2_preferences(bpy.types.AddonPreferences):
@@ -2814,7 +3141,8 @@ bv2Classes = (BV2_UL_hair_curves, BV2_PT_bv2Properties, BV2_PT_bv2ExpandProp, BV
                 BV2_OT_exit_sculpt_mode, BV2_OT_create_sim_guides, BV2_OT_create_sculpt_guide, BV2_OT_single_user, 
                 BV2_OT_single_user_vts, BV2_OT_single_user_matt, BV2_OT_choose_nodeTree, BV2_OT_rename_nodeTree, BV2_OT_resample_guides,
                 BV2_OT_generate_guides, BV2_OT_add_empty_hair, BV2_OT_apply_guides, BV2_OT_delete_guides, BV2_OT_rescale_hair, 
-                BV2_OT_remove_sim_collection, BV2_OT_remove_empty_hair, BV2_OT_hide_hair_curve, BV2_OT_execute_cloth_settings,BV2_preferences,BV2_OT_bake_hair_sim)
+                BV2_OT_remove_sim_collection, BV2_OT_remove_empty_hair, BV2_OT_hide_hair_curve, BV2_OT_execute_cloth_settings,BV2_preferences
+                ,BV2_OT_bake_hair_sim,BV2_MT_operator_menu,BV2_OT_add_bgen_groom,BV2_OT_remove_bgen_groom,BV2_OT_choose_vts_nodeTree)
                 
 
 def register():  
