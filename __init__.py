@@ -884,14 +884,24 @@ class BV2_OT_add_bgen_groom(bpy.types.Operator):
                     return True
             return False
         
-        if "bgen_v2_nodes" not in bpy.data.node_groups:
+        if bgen_groom_mod_01 not in bpy.data.node_groups:
+            ''' Gets VTS modifier from resouorce file''' 
+            dirpath = os.path.dirname(os.path.realpath(__file__))
+            resource_folder = os.path.join(dirpath,"resources")
+            nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+            with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
+                data_to.node_groups = [bgen_groom_mod_01]
+                
+        '''if "bgen_v2_nodes" not in bpy.data.node_groups:
             load_node("bgen_v2_nodes", link=False)
             
         if bgen_groom_mod_01 not in bpy.data.node_groups:
-            load_node(bgen_groom_mod_01, link=False)
+            load_node(bgen_groom_mod_01, link=False)'''
 
         if bgen_hair_shader not in bpy.data.materials:
             load_material(bgen_hair_shader, link=False)
+        
 
         return context.window_manager.invoke_props_dialog(self)
     
