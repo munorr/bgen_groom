@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BGEN Groom",
     "author": "Munorr",
-    "version": (1, 2, 1),
+    "version": (1, 2, 2),
     "blender": (3, 5, 0),
     "location": "View3D > N",
     "description": "Control parameters from B-GEN v2 geometry node hair system",
@@ -257,25 +257,52 @@ class BV2_OT_single_user(bpy.types.Operator):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False 
         
-        obj_ =  bpy.data.objects[bpy.context.active_object.hair_curves_active_index]        
-        modN = get_gNode(obj_)[0]
-        ntN = get_gNode(obj_)[1]
-        ntID = get_gNode(obj_)[2]
-        if ntID == "":
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
             return False
         return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
     def execute(self, context):
-        obj_ =  bpy.data.objects[bpy.context.active_object.hair_curves_active_index]    
-        node_group_name = get_gNode(obj_)[0].name
-        org_mod = obj_.modifiers[node_group_name].node_group
-        obj_.modifiers[node_group_name].node_group = obj_.modifiers[node_group_name].node_group.copy()
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        #obj_ =  bpy.data.objects[bpy.context.active_object.hair_curves_active_index]    
+        node_group_name = get_gNode(obj)[0].name
+        org_mod = obj.modifiers[node_group_name].node_group
+        obj.modifiers[node_group_name].node_group = obj.modifiers[node_group_name].node_group.copy()
         
         return{'FINISHED'}
 
@@ -350,12 +377,27 @@ class BV2_OT_generate_guides(bpy.types.Operator):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
-        if bpy.context.active_object.hair_curves_active_index < 0:
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
             return False
         return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
@@ -369,16 +411,30 @@ class BV2_OT_generate_guides(bpy.types.Operator):
                 with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
                     data_to.node_groups = [gg_mod_name_01]
 
-        objs = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
         
-        mod_01 = objs.modifiers.new(name="geometry_nodes_mod", type='NODES')
+        mod_01 = obj.modifiers.new(name="geometry_nodes_mod", type='NODES')
         mod_01.node_group = bpy.data.node_groups[gg_mod_name_01]
         #mod1_index = objs.modifiers.find(mod_01.name)
         #objs.modifiers.move(mod1_index, 0)
         
-        modName = objs.modifiers[-1].name
-        objs.modifiers[modName]["Input_2"] = objs.parent
-        objs.modifiers[modName]["Input_18_attribute_name"] = bpy.data.hair_curves[objs.data.name].surface_uv_map
+        modName = obj.modifiers[-1].name
+        obj.modifiers[modName]["Input_2"] = obj.parent
+        obj.modifiers[modName]["Input_18_attribute_name"] = bpy.data.hair_curves[obj.data.name].surface_uv_map
         return{'FINISHED'}
 
 class BV2_OT_apply_guides(bpy.types.Operator):
@@ -392,24 +448,59 @@ class BV2_OT_apply_guides(bpy.types.Operator):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
             return False
         return context.mode == "OBJECT" or "SCULPT_CURVES" or "EDIT"
     
     def execute(self, context):
-        objs = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
         
-        if len(objs.modifiers) > 0:
-            first_modifier = objs.modifiers[-1]
+        if len(obj.modifiers) > 0:
+            first_modifier = obj.modifiers[-1]
             
             if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
                 bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = False
-                for obj in bpy.context.selected_objects:
-                    obj.select_set(False)
-                bpy.context.view_layer.objects.active = objs
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+                bpy.context.view_layer.objects.active = obj
                 bpy.ops.object.modifier_apply(modifier=first_modifier.name)
                 bpy.ops.object.editmode_toggle()
                 bpy.ops.object.editmode_toggle()
@@ -417,9 +508,9 @@ class BV2_OT_apply_guides(bpy.types.Operator):
                 bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = True
                 
             else:
-                for obj in bpy.context.selected_objects:
-                    obj.select_set(False)
-                bpy.context.view_layer.objects.active = objs
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+                bpy.context.view_layer.objects.active = obj
                 bpy.ops.object.modifier_apply(modifier=first_modifier.name)
                 bpy.ops.object.editmode_toggle()
                 bpy.ops.object.editmode_toggle()
@@ -555,17 +646,31 @@ class BV2_OT_choose_nodeTree(bpy.types.Operator):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
 
-        obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        modN = get_gNode(obj_)[0]
-        ntN = get_gNode(obj_)[1]
-        ntID = get_gNode(obj_)[2]
-        if ntID == "":
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        modN = get_gNode(obj)[0]
+        ntN = get_gNode(obj)[1]
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
             return False
         return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
@@ -575,10 +680,26 @@ class BV2_OT_choose_nodeTree(bpy.types.Operator):
         description="Select bgen modifier",)
     
     def execute(self, context):
-        obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        node_group_name = get_gNode(obj_)[0].name
-        org_mod = obj_.modifiers[node_group_name].node_group
-        obj_.modifiers[node_group_name].node_group = bpy.data.node_groups[self.bv2_nodes]
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        node_group_name = get_gNode(obj)[0].name
+        org_mod = obj.modifiers[node_group_name].node_group
+        obj.modifiers[node_group_name].node_group = bpy.data.node_groups[self.bv2_nodes]
         return{'FINISHED'}
 
 class BV2_OT_choose_vts_nodeTree(bpy.types.Operator):
@@ -750,7 +871,24 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             grid_r.prop(self,"ng_name", text = "")
             
     def execute(self, context):
-        aObj = bpy.context.active_object
+
+        bv2_tools = context.scene.bv2_tools
+        if bv2_tools.pin_obj == True:
+            if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                obj = bpy.context.scene.bv2_tools.pinned_obj
+            else:
+                obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+        else:
+            if bpy.context.active_object.hair_curves_active_index == -1:
+                obj = context.active_object
+            else:
+                obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+
+        if obj.type == "MESH":
+            aObj = obj
+        if obj.type == "CURVES":
+            aObj = obj.parent
+        #aObj = bpy.context.active_object
         x = aObj.location[0]
         y = aObj.location[1]
         z = aObj.location[2]
@@ -760,6 +898,7 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             #Create new empty curve
             #------------------------------------------------------------------------------------------------
             uv_name = aObj.data.uv_layers.active.name
+            bpy.context.view_layer.objects.active = aObj
             bpy.ops.object.curves_empty_hair_add(align='WORLD', location=(x, y, z), scale=(1, 1, 1))
             hc_obj = bpy.context.active_object  #hair curve object
             #------------------------------------------------------------------------------------------------
@@ -809,7 +948,7 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             bpy.ops.object.editmode_toggle()
             bpy.ops.curves.sculptmode_toggle()
             
-            bpy.context.object.hair_curves_active_index = get_hair_curves_active_index(hc_obj)
+            hc_obj.parent.hair_curves_active_index = get_hair_curves_active_index(hc_obj)
             
             
         else:
@@ -828,19 +967,31 @@ class BV2_OT_add_bgen_groom(bpy.types.Operator):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
-        if bpy.context.active_object.hair_curves_active_index < 0:
+        
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if ntID == nodeID_1:
             return False
-        if bpy.context.active_object.hair_curves_active_index:
-            if get_gNode(bpy.data.objects[bpy.context.active_object.hair_curves_active_index])[2] == nodeID_1:
-                return False
-        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
-    name: bpy.props.StringProperty(name="Curve Name", description="Enter a name for the new hair curve", default="hair_")
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
     hairType: bpy.props.EnumProperty(
         items=(('EXISTING', "Use Existing", "Use existing bgen modifier"),
@@ -940,15 +1091,45 @@ class BV2_OT_add_bgen_groom(bpy.types.Operator):
             grid_r.prop(self,"ng_name", text = "")
             
     def execute(self, context):
-        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        obj_parent = bpy.data.objects[bpy.context.active_object.hair_curves_active_index].parent
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        obj_parent = obj.parent
 
         if obj.type == "CURVES":
             #Create new empty curve
             #------------------------------------------------------------------------------------------------
             uv_name = obj_parent.data.uv_layers.active.name
             #bpy.ops.object.curves_empty_hair_add(align='WORLD', location=(x, y, z), scale=(1, 1, 1))
-            hc_obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                obj_exp = context.object.bv2_expand
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+            hc_obj = obj
+            #hc_obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
             #hc_obj = bpy.context.active_object  #hair curve object
             bpy.context.view_layer.objects.active = hc_obj
             #------------------------------------------------------------------------------------------------
@@ -956,7 +1137,6 @@ class BV2_OT_add_bgen_groom(bpy.types.Operator):
             #------------------------------------------------------------------------------------------------
             while hc_obj.modifiers:
                hc_obj.modifiers.remove(hc_obj.modifiers[0])
-            hc_obj.name = self.name
             #bpy.ops.object.location_clear(clear_delta=False)
             bpy.context.view_layer.objects.active = hc_obj.parent
             #------------------------------------------------------------------------------------------------
@@ -998,7 +1178,7 @@ class BV2_OT_add_bgen_groom(bpy.types.Operator):
             bpy.ops.object.editmode_toggle()
             bpy.ops.curves.sculptmode_toggle()
             
-            bpy.context.object.hair_curves_active_index = get_hair_curves_active_index(hc_obj)
+            hc_obj.parent.hair_curves_active_index = get_hair_curves_active_index(hc_obj)
             
             
         else:
@@ -1020,13 +1200,44 @@ class BV2_OT_remove_bgen_groom(bpy.types.Operator):
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
-        if bpy.context.active_object.hair_curves_active_index:
-            if get_gNode(bpy.data.objects[bpy.context.active_object.hair_curves_active_index])[2] != nodeID_1:
-                return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
         return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
     def execute(self, context):
-        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
         if obj.modifiers:
             for modifier in obj.modifiers:
                 if get_gNode(obj)[2] == nodeID_1:
@@ -1046,37 +1257,65 @@ class BV2_OT_remove_empty_hair(bpy.types.Operator):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
-        if bpy.context.active_object.hair_curves_active_index < 0:
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
             return False
         return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
     def execute(self, context):
         
-        objs = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        obj_mode = bpy.ops.object.mode_set(mode='OBJECT')
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
         
-        if objs.type == "CURVES":
-            parent_obj = objs.parent
+        if obj.type == "CURVES":
+            parent_obj = obj.parent
             if bpy.context.object.mode != 'OBJECT':
                 bpy.ops.object.mode_set(mode='OBJECT')
                 
             bpy.ops.object.select_all(action='DESELECT')
             
-            if objs.children:
-                for child in objs.children:
+            if obj.children:
+                for child in obj.children:
                     child.hide_select = False
                     child.hide_viewport = False
                     child.select_set(True)
                     bpy.ops.object.delete(use_global=True)
                     
-            objs.hide_select = False
-            objs.hide_viewport = False
-            objs.select_set(True)
+            obj.hide_select = False
+            obj.hide_viewport = False
+            obj.select_set(True)
             bpy.ops.object.delete(use_global=True)
 
             
@@ -1428,25 +1667,56 @@ class BV2_OT_duplicate_hair(bpy.types.Operator):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
-        if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
             return False
         return context.mode == "OBJECT" 
     
     def execute(self, context):
-        obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        parent_obj = obj_.parent
-        obj_.hide_select = False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+
+        parent_obj = obj.parent
+        obj.hide_select = False
         bpy.ops.object.select_all(action='DESELECT')
-        obj_.select_set(True)
-        bpy.context.view_layer.objects.active = obj_
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
         bpy.ops.object.duplicate()
         obj = bpy.context.active_object
-        obj.name = obj_.name + "_copy"
+        obj.name = obj.name + "_copy"
 
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.view_layer.objects.active = parent_obj
@@ -1544,18 +1814,34 @@ class BV2_OT_rescale_hair(bpy.types.Operator):
     """Rescales hair and emiter object for more accurate generation (Needed only if object is too small)"""
     bl_idname = "object.bv2_rescale_hair"
     bl_label = "Rescale hair"
+    bl_options = {'REGISTER', 'UNDO'}
     
     @classmethod
     def poll(cls, context):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
-        if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
             return False
         return context.mode == "OBJECT" 
     
@@ -1594,7 +1880,24 @@ class BV2_OT_rescale_hair(bpy.types.Operator):
 
     def execute(self, context):
         if self.scale_option == "RESCALE":
-            mesh_obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index].parent
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                obj_exp = context.object.bv2_expand
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+
+            mesh_obj = obj.parent
             bpy.ops.object.select_all(action='DESELECT')
             for obj_ in get_hairCurve_list(mesh_obj):
                 if obj_.type == "CURVES":
@@ -1612,7 +1915,26 @@ class BV2_OT_rescale_hair(bpy.types.Operator):
             obj_.parent.select_set(True)
             bpy.context.view_layer.objects.active = obj_.parent
         else:
-            mesh_obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index].parent
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                obj_exp = context.object.bv2_expand
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            ntID = get_gNode(obj)[2]
+            if not ntID == nodeID_1:
+                return False
+            mesh_obj = obj.parent
             bpy.ops.object.select_all(action='DESELECT')
             for obj_ in get_hairCurve_list(mesh_obj):
                 if obj_.type == "CURVES":
@@ -1631,17 +1953,36 @@ class BV2_OT_resample_guides(bpy.types.Operator):
     """Resamples the nuber of control points on a guide"""
     bl_idname = "object.bv2_resample_guides"
     bl_label = "Resample guide"
+    bl_options = {'REGISTER', 'UNDO'}
     
     @classmethod
     def poll(cls, context):
         active = context.active_object
         if active is None:
             return False
-        if get_curveChild(active).type != "CURVES":
-            return False
         selected_objects = context.selected_objects
         if selected_objects is None:
             return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if ntID == nodeID_1:
+            return False
+        
         if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
             return False
         return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
@@ -1655,7 +1996,24 @@ class BV2_OT_resample_guides(bpy.types.Operator):
     
     def execute(self, context):
         bpy.ops.object.mode_set(mode='OBJECT')
-        obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        obj_ = obj
+        #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
         group = bpy.data.node_groups.get(rc_mod_name_01)
         mod = obj_.modifiers.new(name="Resample_Guides", type='NODES')
         mod.node_group = group
