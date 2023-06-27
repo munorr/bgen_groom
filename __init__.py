@@ -1347,6 +1347,8 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             cloth_modifier.settings.vertex_group_mass = "Group"  # Sets Pin group
             cloth_modifier.collision_settings.vertex_group_object_collisions = "" # Sets Collision group
             cloth_modifier.collision_settings.distance_min = 0.001
+            cloth_modifier.collision_settings.self_distance_min = 0.001
+            cloth_modifier.settings.effector_weights.all = 100
             if self.collision_collection == "":
                 pass
                 #cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
@@ -1887,7 +1889,22 @@ class BV2_UL_hair_curves(bpy.types.UIList):
     def filter_items(self, context, data, propname):
         objects = getattr(data, propname)
 
-        obj = context.object
+        #obj = context.object
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
 
         #
         # NEW CODE (context.obj below was changed to obj too)
@@ -3207,12 +3224,13 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                     grid_l.scale_x = 1.8
                                     grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
                                         
-                                    grid_l.label(text = "      Quality")
-                                    grid_l.label(text = "Air Viscusity")
-                                    grid_l.label(text = "         Mass")
-                                    grid_l.label(text = "      Gravity")
-                                    grid_l.label(text = "      Tension")
-                                    grid_l.label(text = "    Stiffness")
+                                    grid_l.label(text = "         Quality")
+                                    grid_l.label(text = "   Air Viscusity")
+                                    grid_l.label(text = "            Mass")
+                                    grid_l.label(text = "         Gravity")
+                                    grid_l.label(text = "         Tension")
+                                    grid_l.label(text = "       Stiffness")
+                                    grid_l.label(text = "Force Multiplier")
 
                                     grid_r.prop(sim_obj_data.settings, "quality", text = "")
                                     grid_r.prop(sim_obj_data.settings, "air_damping", text = "")
@@ -3220,6 +3238,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                     grid_r.prop(sim_obj_data.settings.effector_weights, "gravity", text = "")
                                     grid_r.prop(sim_obj_data.settings, "tension_stiffness", text = "")
                                     grid_r.prop(sim_obj_data.settings, "pin_stiffness", text = "")
+                                    grid_r.prop(sim_obj_data.settings.effector_weights, "all", text = "")
                                 else:
                                     rowss.prop(obj_exp, "my_exp12",icon="RIGHTARROW", text="Sim Values", emboss=False)
 
