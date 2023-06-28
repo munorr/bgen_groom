@@ -18,6 +18,13 @@ from bpy.types import Context
 
 from . import addon_updater_ops
 from bpy.utils import previews
+
+from bpy.types import Menu, Panel, UIList, WindowManager
+
+class View3DPanel:
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+
 icons = previews.new()
 icons.load(
     name='BGEN_GROOM',
@@ -1903,6 +1910,7 @@ class BV2_OT_rescale_hair(bpy.types.Operator):
                 if obj_.type == "CURVES":
                     #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
                     obj_.hide_select = False
+                    obj_.hide_viewport = False
                     obj_.select_set(True)
 
             mesh_obj.select_set(True)
@@ -1940,6 +1948,7 @@ class BV2_OT_rescale_hair(bpy.types.Operator):
                 if obj_.type == "CURVES":
                     #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
                     obj_.hide_select = False
+                    obj_.hide_viewport = False
                     obj_.select_set(True)
 
             obj_.parent.select_set(True)
@@ -2153,6 +2162,191 @@ class BV2_OT_bake_hair_sim(bpy.types.Operator):
         self.report({"INFO"},message="SIM BAKE FINISHED")
         return {'FINISHED'}
 
+class BV2_OT_fix_hair_position(bpy.types.Operator):
+    """Fixes the position of haircurves"""
+    bl_idname = "object.bv2_fix_hair_position"
+    bl_label = "Fix Position"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
+        return context.mode == "OBJECT" 
+    
+    reset_options: bpy.props.EnumProperty(
+        items=(('WORLD', "Reset to world Origin", "Reset to world Origin"),
+               ('OBJECT', "Reset to Object Origin", "Reset to world Origin"),
+               ('CURRENT', "Reset to current Origin", "Reset to world Origin")),
+        default='OBJECT')
+    
+    reset_origin : bpy.props.BoolProperty(name="Reset Object Origin", description="Resets the origin of your object to 'World Origin'", default=False)
+
+    def invoke(self, context, event):
+        # Display a popup asking for the collection name
+        return context.window_manager.invoke_props_dialog(self)
+    
+    def draw(self, context):
+        
+        layout = self.layout
+        col = layout.column()
+        box = col.box()
+        col_ = box.column()
+        col_.scale_y = 1.6
+        col_.prop(self,"reset_options",expand=True,)
+
+
+    def execute(self, context):
+        if self.reset_options == "WORLD":
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                obj_exp = context.object.bv2_expand
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            mesh_obj = obj.parent
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            bpy.ops.view3d.snap_cursor_to_selected()
+
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj_ in get_hairCurve_list(mesh_obj):
+                if obj_.type == "CURVES":
+                    #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+                    obj_.hide_select = False
+                    obj_.hide_viewport = False
+                    obj_.select_set(True)
+
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            #bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+        
+        if self.reset_options == "OBJECT":
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                obj_exp = context.object.bv2_expand
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            mesh_obj = obj.parent
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj_ in get_hairCurve_list(mesh_obj):
+                if obj_.type == "CURVES":
+                    obj_.hide_select = False
+                    obj_.hide_viewport = False
+                    obj_.select_set(True)
+
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+            bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
+            bpy.ops.view3d.snap_cursor_to_selected()
+
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj_ in get_hairCurve_list(mesh_obj):
+                if obj_.type == "CURVES":
+                    obj_.hide_select = False
+                    obj_.hide_viewport = False
+                    obj_.select_set(True)
+
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+
+        if self.reset_options == "CURRENT":
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                obj_exp = context.object.bv2_expand
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            mesh_obj = obj.parent
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+            bpy.ops.view3d.snap_cursor_to_selected()
+
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj_ in get_hairCurve_list(mesh_obj):
+                if obj_.type == "CURVES":
+                    #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+                    obj_.hide_select = False
+                    obj_.hide_viewport = False
+                    obj_.select_set(True)
+
+            #bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+        return {'FINISHED'}
+
 class BV2_MT_operator_menu(bpy.types.Menu):
     bl_label = "BGEN operator menu"
 
@@ -2163,7 +2357,8 @@ class BV2_MT_operator_menu(bpy.types.Menu):
         col.operator("object.bv2_duplicate_hair", text="Duplicate Hair", icon = "DUPLICATE")
         col.operator("object.bv2_rescale_hair", text="Rescale Hair", icon = "TOOL_SETTINGS")
         col.operator("object.add_bgen_groom", text="Add BGEN groom mod", icon = "ADD")
-        col.operator("object.remove_bgen_groom", text="Remove BGEN groom", icon = "REMOVE")
+        col.operator("object.remove_bgen_groom", text="Remove BGEN groom", icon = "REMOVE") 
+        col.operator("object.bv2_fix_hair_position", text="Fix Hair Position", icon = "TOOL_SETTINGS")
            
 
 #=========================================================================================================    
@@ -2522,7 +2717,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
     bl_label = " BGEN Groom"
     bl_idname = "OBJECT_PT_bgen_v2_ui"
     bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
+    bl_region_type = 'UI' 
     bl_category = 'BGEN HAIR'
     
     def draw_header(self, context):
@@ -3712,7 +3907,153 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 rowSv.prop(sim_obj_data, "show_viewport", text = "")
                                 rowSv.prop(sim_obj_data, "show_render", text = "")
             
+class SelectPaintSlotHelper:
+    bl_category = "BGEN HAIR"
+
+    canvas_source_attr_name = "canvas_source"
+    canvas_image_attr_name = "canvas_image"
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.label(text="", icon = "TEXTURE")
+
+    def draw(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+        if obj.type == "MESH":
+            ob = obj
+        if obj.type == "CURVES":
+            ob = obj.parent
+
+        settings = context.tool_settings.image_paint
+        mode_settings = self.get_mode_settings(context)
+        have_image = False
+
+        layout = self.layout
+        col = layout.column(align = True)
+        box = col.box()
+        col_ = box.column()
+
+        row_ = col_.row()
+        row_.scale_y = 1.4
+        row_.prop(mode_settings, self.canvas_source_attr_name,expand = True)
+        col_.separator()
+
         
+        box_ = col_.box()
+        col_ = box_.column(align = False)
+        col_.scale_x = 1.4
+        col_.scale_y = 1.4
+
+        match getattr(mode_settings, self.canvas_source_attr_name):
+            case 'MATERIAL':
+                if len(ob.material_slots) > 1:
+                    layout.template_list(
+                        "MATERIAL_UL_matslots", "layers",
+                        ob, "material_slots",
+                        ob, "active_material_index", rows=2,
+                    )
+                mat = ob.active_material
+                if mat and mat.texture_paint_images:
+                    row = col_.row()
+                    row.template_list(
+                        "TEXTURE_UL_texpaintslots", "",
+                        mat, "texture_paint_slots",
+                        mat, "paint_active_slot", rows=2,
+                    )
+
+                    if mat.texture_paint_slots:
+                        slot = mat.texture_paint_slots[mat.paint_active_slot]
+                    else:
+                        slot = None
+
+                    have_image = slot is not None
+                else:
+                    row = col_.row()
+
+                    box = row.box()
+                    box.label(text="No Textures")
+
+                sub = row.column(align=True)
+                sub.operator_menu_enum("paint.add_texture_paint_slot", "type", icon='ADD', text="")
+
+            case 'IMAGE':
+                
+                mesh = ob.data
+                uv_text = mesh.uv_layers.active.name if mesh.uv_layers.active else ""
+                col_.template_ID(mode_settings, self.canvas_image_attr_name, new="image.new", open="image.open")
+                row_ = col_.row(align = True)
+                if settings.missing_uvs:
+                    row_.operator("paint.add_simple_uvs", icon='ADD', text="Add UVs")
+                else:
+                    row_.menu("VIEW3D_MT_tools_projectpaint_uvlayer", text=uv_text, translate=False)
+                have_image = getattr(settings, self.canvas_image_attr_name) is not None
+
+                self.draw_image_interpolation(layout=row_, mode_settings=mode_settings)
+
+            case 'COLOR_ATTRIBUTE':
+                mesh = ob.data
+
+                row = col_.row()
+                col = row.column()
+                col.template_list(
+                    "MESH_UL_color_attributes_selector",
+                    "color_attributes",
+                    mesh,
+                    "color_attributes",
+                    mesh.color_attributes,
+                    "active_color_index",
+                    rows=3,
+                )
+
+                col = row.column(align=True)
+                col.operator("geometry.color_attribute_add", icon='ADD', text="")
+                col.operator("geometry.color_attribute_remove", icon='REMOVE', text="")
+
+        if settings.missing_uvs:
+            #layout.separator()
+            split = layout.split()
+            split.label(text="UV Map Needed", icon='INFO')
+            split.operator("paint.add_simple_uvs", icon='ADD', text="Add Simple UVs")
+        elif have_image:
+            #layout.separator()
+            col_s = layout.column()
+            col_s.scale_y = 1.4
+            col_s.operator("image.save_all_modified", text="Save All Images", icon='FILE_TICK',depress = True)
+
+class VIEW3D_PT_slots_projectpaint(SelectPaintSlotHelper, View3DPanel, Panel):
+    bl_category = "BGEN HAIR"
+    bl_context = ".imagepaint"  # dot on purpose (access from topbar)
+    bl_label = "BGEN Texture Mask"
+    bl_idname = "OBJECT_PT_bgen_texture"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+
+    canvas_source_attr_name = "mode"
+    canvas_image_attr_name = "canvas"
+
+    @classmethod
+    def poll(cls, context):
+        brush = context.tool_settings.image_paint.brush
+        return (brush is not None and context.active_object is not None)
+
+    def get_mode_settings(self, context):
+        return context.tool_settings.image_paint
+
+    def draw_image_interpolation(self, layout, mode_settings):
+        layout.prop(mode_settings, "interpolation", text="")
               
 @addon_updater_ops.make_annotations
 class BV2_preferences(bpy.types.AddonPreferences):
@@ -3770,7 +4111,7 @@ bv2Classes = (BV2_UL_hair_curves, BV2_PT_bv2Properties, BV2_PT_bv2ExpandProp, BV
                 BV2_OT_generate_guides, BV2_OT_add_empty_hair, BV2_OT_apply_guides, BV2_OT_delete_guides, BV2_OT_rescale_hair, 
                 BV2_OT_remove_sim_collection, BV2_OT_remove_empty_hair, BV2_OT_hide_hair_curve, BV2_OT_execute_cloth_settings,BV2_preferences,
                 BV2_OT_bake_hair_sim,BV2_MT_operator_menu,BV2_OT_add_bgen_groom,BV2_OT_remove_bgen_groom,BV2_OT_choose_vts_nodeTree,
-                )
+                BV2_OT_fix_hair_position,VIEW3D_PT_slots_projectpaint)
                 
 
 def register():  
