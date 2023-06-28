@@ -2470,6 +2470,7 @@ class BV2_OT_enter_texture(bpy.types.Operator):
             mesh_obj = obj.parent
         #'PAINT_TEXTURE
         if not bpy.context.mode == 'PAINT_TEXTURE':
+            bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.select_all(action='DESELECT')
             mesh_obj.select_set(True)
             bpy.context.view_layer.objects.active = mesh_obj
