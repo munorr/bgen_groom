@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BGEN Groom",
     "author": "Munorr",
-    "version": (1, 2, 2),
+    "version": (1, 2, 4),
     "blender": (3, 5, 0),
     "location": "View3D > N",
     "description": "Control parameters from B-GEN v2 geometry node hair system",
@@ -2410,6 +2410,80 @@ class BV2_OT_fix_hair_position(bpy.types.Operator):
             bpy.context.view_layer.objects.active = mesh_obj
         return {'FINISHED'}
 
+class BV2_OT_enter_texture(bpy.types.Operator):
+    """Switches to Texture mode"""
+    bl_idname = "object.bv2_enter_texture"
+    bl_label = "Enter Texture"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
+        return context.mode 
+    
+    
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        if obj.type == "MESH":
+            mesh_obj = obj
+        if obj.type == "CURVES":
+            mesh_obj = obj.parent
+        #'PAINT_TEXTURE
+        if not bpy.context.mode == 'PAINT_TEXTURE':
+            bpy.ops.object.select_all(action='DESELECT')
+            mesh_obj.select_set(True)
+            bpy.context.view_layer.objects.active = mesh_obj
+            bpy.ops.object.mode_set(mode='TEXTURE_PAINT', toggle=False)
+        else:
+            bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+
+
+
+        
+
+        return {'FINISHED'} 
+
 class BV2_MT_operator_menu(bpy.types.Menu):
     bl_label = "BGEN operator menu"
 
@@ -2745,6 +2819,7 @@ class BV2_PT_bv2ExpandProp(bpy.types.PropertyGroup):
     my_exp14 : bpy.props.BoolProperty(default=False) # Self Collision
     my_exp15 : bpy.props.BoolProperty(default=False) # Hair Accessories
     my_exp16 : bpy.props.BoolProperty(default=False) # Hair Curve settings
+    my_exp17 : bpy.props.BoolProperty(default=False) # Density Mask
     
     my_expF1 : bpy.props.BoolProperty(default=False)
     my_expF2 : bpy.props.BoolProperty(default=False) 
@@ -2851,9 +2926,12 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             col.scale_y = 1.2
             
             box_main = col.box()
-            
-            row_label = box_main.row(align=False)
+            row_main = box_main.row()
+
+            row_label = row_main.row(align=False)
             row_label.alignment = "LEFT"
+
+
             
             # OBJECT LABELING
             if bv2_tools.pin_obj == True:
@@ -2862,7 +2940,11 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                 obj_ac = bpy.context.active_object
 
             #try: 
+
             row_label.label(text = obj_ac.name, icon = "OBJECT_DATAMODE")
+            row_pin = row_main.row()
+            row_pin.alignment = "RIGHT"
+            row_pin.prop(bv2_tools, "pin_obj", text="", icon = "PINNED" if bv2_tools.pin_obj else "UNPINNED", icon_only = True, emboss=False)
                 
             col = box_main.column()
             col.scale_y = 1.1
@@ -3089,7 +3171,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         row_.operator("object.bv2_delete_guides", text = "Delete Guides", icon = "CANCEL")
                         
                     else:
-                        col_ = col.column(align = False)
+                        box_ = col.box()
+                        col_ = box_.column(align = False)
                         col_.separator(factor=.4)
                         col_.scale_y = 1.6
                         row_ = col_.row(align = True)
@@ -3129,11 +3212,10 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                     #INITIALIZE DRAWER
                     if obj_exp.my_exp1:
                         row1.prop(obj_exp, "my_exp1",icon="TRIA_DOWN", text="INITIALIZE", emboss=False)
-                        row1.prop(bgenMod, '["Input_42"]', text = 'Low Poly', icon = "RADIOBUT_ON")
+                        row1.prop(bgenMod, '["Input_42"]', text = 'Low Poly')
                         #col_ = col.column(align = True)
                         
-
-                        box_00 = col_.box()
+                        box_00 = col_.box().box()
                         col_c = box_00.column(align = False)
                         col_c.label(text="Hair Children Type:",icon = "OUTLINER_OB_CURVES")
 
@@ -3146,40 +3228,74 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         if obj.modifiers[bgenMod.name]["Input_66"] == False:
                             row_c.prop(bgenMod, '["Input_66"]', text = 'Interpulated', icon="BLANK1",invert_checkbox=True)
                             row_c.prop(bgenMod, '["Input_66"]', text = 'Children', icon="BLANK1")
+                        
                         #-------------------------------------------------------------------------------------------------
                         box_00 = col_.box()
-                        box_00.label(text = "Density Mask:",icon="BRUSH_CURVES_DENSITY")
-                        dmCntr.draw(context, box_00, dmNode, text = '')
+                        uvc = box_00.column()
+                        uvc.scale_x = 1.2
+                        uvc.scale_y = 1.2
+                        uvr = uvc.row()
+                        #uvr.scale_y = 1.2
+                        grid_l = uvr.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                        grid_l.alignment = "RIGHT"
+                        grid_l.scale_x = 1.8
+                        grid_r = uvr.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
                         
-                        box_00 = col_.box()
-                        uvr = box_00.row()
-                        uvr.alignment = "RIGHT"
-                        uvr.scale_x = 1.4
-                        uvr.label(text = "UV Map name")
-                        uvr.prop(bgenMod, '["Input_41"]', text = '')
+                        grid_l.label(text = "UV Map name")
+                        grid_l.label(text = "  Attach To")
 
-                        atr = box_00.row()
-                        atr.alignment = "RIGHT"
-                        atr.scale_x = 1.4
-                        atr.label(text = "         Attach To")
-                        atr.prop(bgenMod, '["Input_14"]', text = '')
+                        grid_r.prop(bgenMod, '["Input_41"]', text = '')
+                        grid_r.prop(bgenMod, '["Input_14"]', text = '')
+                        #-------------------------------------------------------------------------------------------------
+                        #-------------------------------------------------------------------------------------------------
+                        box_00 = col_.box()
+                        dm_row = box_00.row()
+                        dm_row.scale_x = 1.2
+                        #dm_row.alignment = "CENTER"
+                        if obj_exp.my_exp17:
+                            dm_row.prop(obj_exp, "my_exp17",icon="TRIA_DOWN", text="Density Mask", emboss=False)
+                            if context.mode == "PAINT_TEXTURE":
+                                dm_row.operator("object.bv2_enter_texture",text="",icon="TEXTURE",depress=True)
+                            else:
+                                dm_row.operator("object.bv2_enter_texture",text="",icon="TEXTURE")
+
+                            dmCntr.draw(context, box_00, dmNode, text = '')
+                        else:
+                            dm_row.prop(obj_exp, "my_exp17",icon="TRIA_RIGHT", text="Density Mask", emboss=False)
+                            if context.mode == "PAINT_TEXTURE":
+                                dm_row.operator("object.bv2_enter_texture",text="",icon="TEXTURE",depress=True)
+                            else:
+                                dm_row.operator("object.bv2_enter_texture",text="",icon="TEXTURE")
+
+                        #------------------------------------------------------------------------------------------------- 
                         #-------------------------------------------------------------------------------------------------
                         box_00 = col_.box()
                         pmrow = box_00.row()
-                        pmrow.alignment = "LEFT"
+                        pmrow.scale_x = 1.2
+                        #pmrow.alignment = "LEFT"
                         if obj_exp.my_exp9:
                             pmrow.prop(obj_exp, "my_exp9",icon="TRIA_DOWN", text="Parting Mask", emboss=False)
+                            if context.mode == "PAINT_TEXTURE":
+                                pmrow.operator("object.bv2_enter_texture",text="",icon="TEXTURE",depress=True)
+                            else:
+                                pmrow.operator("object.bv2_enter_texture",text="",icon="TEXTURE")
+
                             pmCntr.draw(context, box_00, pmNode, text = '')
                         else:
                             pmrow.prop(obj_exp, "my_exp9",icon="TRIA_RIGHT", text="Parting Mask", emboss=False)
+                            if context.mode == "PAINT_TEXTURE":
+                                pmrow.operator("object.bv2_enter_texture",text="",icon="TEXTURE",depress=True)
+                            else:
+                                pmrow.operator("object.bv2_enter_texture",text="",icon="TEXTURE")
                         
                         box_00 = col_.box()
                         csrow = box_00.row()
-                        csrow.alignment = "LEFT"
+                        #csrow.alignment = "LEFT"
                         cs = context.scene.render
                         ccs = context.scene.cycles_curves #.shape
                         if obj_exp.my_exp16:
                             csrow.prop(obj_exp, "my_exp16",icon="TRIA_DOWN", text="Curve settings", emboss=False)
+                            csrow.label(icon="OUTLINER_OB_CURVES")
                             cscol = box_00.column(align=True)
                             cscol.use_property_split = True
                             cscol.use_property_decorate = False 
@@ -3201,10 +3317,11 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             
                         else:
                             csrow.prop(obj_exp, "my_exp16",icon="TRIA_RIGHT", text="Curve settings", emboss=False)
+                            csrow.label(icon="OUTLINER_OB_CURVES")
 
                     else:
                         row1.prop(obj_exp, "my_exp1",icon="TRIA_RIGHT", text="INITIALIZE", emboss=False)
-                        row1.prop(bgenMod, '["Input_42"]', text = 'Low Poly', icon = "RADIOBUT_ON")
+                        row1.prop(bgenMod, '["Input_42"]', text = 'Low Poly')
 
                     box_ = col.box()
                     col_ = box_.column(align = True)
@@ -3444,13 +3561,13 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         '''
                         #------------------------------------------------------------------------
                         row_ = col_.row(align = False)
-                        row_.prop(bgenMod, '["Input_51"]', text = 'Guide Clump',icon="BRUSH_CURVES_PINCH")
+                        row_.prop(bgenMod, '["Input_51"]', text = 'Guide Clump')
                         
                         if bgenMod["Input_50"] == 1:
-                            row_.prop(bgenMod, '["Input_50"]', text = 'Interpulated Clump:',icon="BRUSH_CURVES_PINCH")
+                            row_.prop(bgenMod, '["Input_50"]', text = 'Interpulated Clump:')
                             col_.prop(bgenMod, '["Input_52"]', text = 'Interpulated Clump Size')
                         else:
-                            row_.prop(bgenMod, '["Input_50"]', text = 'Interpulated Clump:',icon="BRUSH_CURVES_PINCH")
+                            row_.prop(bgenMod, '["Input_50"]', text = 'Interpulated Clump:')
                             
                         # [Clump_02 Float Curve]
                         fcc = col1.box()
@@ -3648,9 +3765,9 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         if obj_exp.my_expF5:
                             fcr.prop(obj_exp, "my_expF5",icon="TRIA_DOWN", text="Fly Away Strands", emboss=False)
                             fcr.prop(bgenMod, '["Input_53"]', text = '')
+
                             row_ = fcc.row(align = False)
                             row_.scale_y = 1.2
-                            
                             grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
                             grid_l.alignment = "RIGHT"
                             grid_l.scale_x = 1.2
@@ -3697,7 +3814,13 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         box_ = col1.box()
                         col_ = box_.column()
                         col_.scale_y = 1.2
-                        col_.label(text = "Trim Mask:")
+                        row_ = col_.row()
+                        row_.scale_x = 1.2
+                        row_.label(text = "Trim Mask:")
+                        if context.mode == "PAINT_TEXTURE":
+                            row_.operator("object.bv2_enter_texture",text="",icon="TEXTURE",depress=True)
+                        else:
+                            row_.operator("object.bv2_enter_texture",text="",icon="TEXTURE")
                         tmCntr.draw(context, col_, tmNode, text = '')
                         #bpy.context.scene.bv2_tools.texture 
                     else:
@@ -3999,7 +4122,13 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 rowSv.prop(obj_exp, "my_expS2",icon="TRIA_RIGHT", text="Simulation Settings", emboss=False)
                                 rowSv.prop(sim_obj_data, "show_viewport", text = "")
                                 rowSv.prop(sim_obj_data, "show_render", text = "")
-            
+
+ #=========================================================================================================    
+
+#=========================================================================================================
+# 00 ---------------------------         [PANEL LAYOUT]
+#=========================================================================================================
+
 class SelectPaintSlotHelper:
     bl_category = "BGEN HAIR"
 
@@ -4126,7 +4255,7 @@ class SelectPaintSlotHelper:
             col_s.scale_y = 1.4
             col_s.operator("image.save_all_modified", text="Save All Images", icon='FILE_TICK',depress = True)
 
-class VIEW3D_PT_slots_projectpaint(SelectPaintSlotHelper, View3DPanel, Panel):
+class BV2_PT_slots_projectpaint(SelectPaintSlotHelper, View3DPanel, Panel):
     bl_category = "BGEN HAIR"
     bl_context = ".imagepaint"  # dot on purpose (access from topbar)
     bl_label = "BGEN Texture Mask"
@@ -4204,7 +4333,7 @@ bv2Classes = (BV2_UL_hair_curves, BV2_PT_bv2Properties, BV2_PT_bv2ExpandProp, BV
                 BV2_OT_generate_guides, BV2_OT_add_empty_hair, BV2_OT_apply_guides, BV2_OT_delete_guides, BV2_OT_rescale_hair, 
                 BV2_OT_remove_sim_collection, BV2_OT_remove_empty_hair, BV2_OT_hide_hair_curve, BV2_OT_execute_cloth_settings,BV2_preferences,
                 BV2_OT_bake_hair_sim,BV2_MT_operator_menu,BV2_OT_add_bgen_groom,BV2_OT_remove_bgen_groom,BV2_OT_choose_vts_nodeTree,
-                BV2_OT_fix_hair_position,VIEW3D_PT_slots_projectpaint)
+                BV2_OT_fix_hair_position,BV2_PT_slots_projectpaint,BV2_OT_enter_texture)
                 
 
 def register():  
