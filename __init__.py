@@ -980,7 +980,9 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             #hc_obj.modifiers[modName]["Input_47"] = True
             #hc_obj.modifiers[modName]["Input_46"] = hg_obj
             hc_obj.modifiers[modName]["Input_2"] = False
-            
+
+            bgenMod = get_gNode(hc_obj)[0]
+            bgenMod.node_group.nodes["ID:bv2_MC_001"].inputs[0].default_value = bpy.data.materials[bgen_hair_shader]
             hc_obj.hide_select = True
             
             bpy.ops.object.select_all(action='DESELECT')
@@ -1210,7 +1212,8 @@ class BV2_OT_add_bgen_groom(bpy.types.Operator):
             #hc_obj.modifiers[modName]["Input_47"] = True
             #hc_obj.modifiers[modName]["Input_46"] = hg_obj
             hc_obj.modifiers[modName]["Input_2"] = False
-            
+            bgenMod = get_gNode(hc_obj)[0]
+            bgenMod.node_group.nodes["ID:bv2_MC_001"].inputs[0].default_value = bpy.data.materials[bgen_hair_shader]
             hc_obj.hide_select = True
             
             bpy.ops.object.select_all(action='DESELECT')
