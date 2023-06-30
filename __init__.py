@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BGEN Groom",
     "author": "Munorr",
-    "version": (1, 2, 4),
+    "version": (1, 3, 0),
     "blender": (3, 5, 0),
     "location": "View3D > N",
     "description": "Control parameters from B-GEN v2 geometry node hair system",
