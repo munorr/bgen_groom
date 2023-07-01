@@ -3382,14 +3382,20 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                     scCntr = node_data["ID:bv2_SC_001"].inputs[0]
                                     mrow_.prop(mytool, "material_color",expand = True)
                                     color_switch_eevee = material_nt_data["color_switch_eevee"]
+                                    mrow_.separator()
                                     if bpy.context.scene.bv2_tools.material_color == "STRAND":
                                         mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
                                     else:
                                         scCntr.draw(context, mcol_, dmNode, text = '')
                                     color_switch_eevee.inputs[0].draw(context, mrow_, color_switch_eevee, text = '')
+                                    
                                 else:
                                     mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
 
+                                if context.mode == "PAINT_TEXTURE":
+                                    mrow_.operator("object.bv2_enter_texture",text="",icon="TEXTURE",depress=True)
+                                else:
+                                    mrow_.operator("object.bv2_enter_texture",text="",icon="TEXTURE")  
                                 #-------------------------------------------------------------------------------
 
                                 row_ = col_.row(align = False)
@@ -3507,7 +3513,6 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_r.prop(bgenMod, '["Input_12"]', text = '')
                             grid_r.prop(bgenMod, '["Input_8"]', text = '')
                             
-
                             if obj_exp.my_exp8:
                                 col_.prop(obj_exp, "my_exp8",icon="TRIA_DOWN", text="Less Settings", emboss=False)
                                 row_ = col_.row(align = False)
@@ -3592,8 +3597,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                     else:
                         row1.prop(obj_exp, "my_exp2",icon="TRIA_RIGHT", text="HAIR STRANDS", emboss=False)
                         row1.label(text = "", icon = "OUTLINER_OB_CURVES")
-                            
-                        
+                    
                     #================================================================================================================
                                                                     #[CURL]    
                     #================================================================================================================
