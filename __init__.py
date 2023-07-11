@@ -3528,6 +3528,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 #grid_l.separator(factor=.5)
                                 grid_l.label(text = "             Mesh Subdiv")
                                 grid_l.label(text = "Interpulation Guides")
+                                grid_l.label(text = " Extend strand Roots") if "Input_78" in bgenMod else 0
                                 #grid_l.label(text = "           [Clump Factor]")
 
                                 #grid_r.separator(factor=.5)
@@ -3536,6 +3537,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 #grid_r.separator(factor=.5)
                                 grid_r.prop(bgenMod, '["Input_63"]', text = '')
                                 grid_r.prop(bgenMod, '["Input_64"]', text = '')
+                                grid_r.prop(bgenMod, '["Input_78"]', text = '') if "Input_78" in bgenMod else 0
                                 #grid_r.prop(bgenMod, '["Input_38"]', text = '')
                             else:
                                 col_.prop(obj_exp, "my_exp8",icon="TRIA_RIGHT", text="More Settings", emboss=False)
@@ -3555,6 +3557,23 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_r.prop(bgenMod, '["Input_67"]', text = '')
                             grid_r.prop(bgenMod, '["Input_68"]', text = '')
                             grid_r.prop(bgenMod, '["Input_69"]', text = '')
+
+                            if obj_exp.my_exp8:
+                                col_.prop(obj_exp, "my_exp8",icon="TRIA_DOWN", text="Less Settings", emboss=False)
+                                row_ = col_.row(align = False)
+
+                                grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                                grid_l.alignment = "RIGHT"
+                                grid_l.scale_x = 1.3
+                                grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+
+                                grid_l.label(text = " Extend strand Roots") if "Input_78" in bgenMod else 0
+ 
+                                grid_r.prop(bgenMod, '["Input_78"]', text = '') if "Input_78" in bgenMod else 0
+
+                            else:
+                                col_.prop(obj_exp, "my_exp8",icon="TRIA_RIGHT", text="More Settings", emboss=False)
+
 
                             if bgenMod["Input_70"] != None:
                                 col_.prop(bgenMod, '["Input_70"]', text = 'Even Thickness')
