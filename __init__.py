@@ -1695,13 +1695,7 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             new_collection.name = "SIM=[" + obj_.name + "]"
 
             #--------------------------------------------------------------------------
-            if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].children:
-                obj0 = bpy.data.objects[bpy.context.active_object.hair_curves_active_index].children[0]
-            else:
-                obj0 = bpy.data.objects[bpy.context.active_object.hair_curves_active_index] 
-
-            mod_name = get_gNode(obj0)[0]
-            nodeTree_name = get_gNode(obj0)[1]
+            mod_name = get_gNode(obj_)[0]
 
             mod_name.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value = new_collection
 
