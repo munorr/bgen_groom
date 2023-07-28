@@ -1705,7 +1705,7 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.object.mode_set(mode='OBJECT')
             new_collection.hide_render = True
-            new_collection.hide_viewport = True
+            #new_collection.hide_viewport = True
             bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[new_collection.name].exclude = True
             
             bpy.context.view_layer.objects.active = obj_.parent
@@ -4022,6 +4022,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                     grid_l.label(text = "       Stiffness")
                                     grid_l.label(text = "Force Multiplier")
 
+                                    grid_r.use_property_split = True
+                                    grid_r.use_property_decorate = True
                                     grid_r.prop(sim_obj_data.settings, "quality", text = "")
                                     grid_r.prop(sim_obj_data.settings, "air_damping", text = "")
                                     grid_r.prop(sim_obj_data.settings, "mass", text = "")
