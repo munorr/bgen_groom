@@ -1,8 +1,8 @@
 bl_info = {
     "name": "BGEN Groom",
     "author": "Munorr",
-    "version": (1, 3, 0),
-    "blender": (3, 5, 0),
+    "version": (1, 4, 1),
+    "blender": (4, 0, 0),
     "location": "View3D > N",
     "description": "Control parameters from B-GEN v2 geometry node hair system",
     "warning": "",
@@ -46,6 +46,7 @@ stc_mod_name_01 = "00_bgen_stc"
 rc_mod_name_01 = "00_bv2: [Resample Curve]"
 gg_mod_name_01 = "00_bv2_Generate_guides"
 bgen_hair_shader = "Bgen_Hair_Shader"
+mc_mod_name_01 = "00_bgen_mirror_curves" #Mirror Curve Modifier name
 
 
 def vts_nodes():
@@ -99,6 +100,7 @@ def get_gNode(obj):
                                 nodeTreeName = c.name
                                 node_ID = "ID:BV2_GEN_HC"
                                 break
+                            
     except:
         pass              
     return modName, nodeTreeName, node_ID
@@ -141,6 +143,28 @@ def get_curveList():
                 
     print(curveList)            
     return(curveList)
+#== Gets the list of modifiers that have bgengroom id
+def get_bgenGroom_Mod(obj_name, node_name):
+    # Get the object
+    if obj_name is None:
+        print("Object not found")
+        return []
+
+    # List to store modifiers
+    geometry_node_modifiers = []
+
+    # Iterate through modifiers
+    for modifier in obj_name.modifiers:
+        # Check if modifier is a geometry node modifier
+        if modifier.type == 'NODES':
+            # Get the geometry nodes tree
+            node_tree = modifier.node_group
+            if node_tree is not None:
+                # Check if the node exists in the tree
+                if node_name in node_tree.nodes:
+                    geometry_node_modifiers.append(modifier)
+
+    return geometry_node_modifiers
 
 def get_sim_collection():
     simCol = []
@@ -149,24 +173,19 @@ def get_sim_collection():
             simCol.append(coll)
     return simCol
         
-def get_curveList_object():
-    curveList = []
-    obj = bpy.context.active_object
+def get_hairCurveList(obj):
+    hairCurveList = []
     if obj.type == "CURVES" and obj.parent:
         parent_obj = obj.parent
-        #print(parent_obj)
         for child in parent_obj.children:
             if child.type == "CURVES":
-                #print(child.name)
-                curveList.append(child)
+                hairCurveList.append(child)
     if obj.type == "MESH" and obj.children:
         for child in obj.children:
             if child.type == "CURVES":
-                #print(child.name)
-                curveList.append(child)
-                
-    print(curveList)            
-    return(curveList)
+                hairCurveList.append(child)
+                         
+    return(hairCurveList)
 
 def get_bv2_curveList():
     curveList = []
@@ -372,7 +391,7 @@ class BV2_OT_rename_nodeTree(bpy.types.Operator):
     
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
-    
+#-------------------------------------------------------------------------    
 class BV2_OT_generate_guides(bpy.types.Operator):
     """Adds Generate Guides modifier"""
     bl_idname = "object.bv2_generate_guides"
@@ -436,10 +455,9 @@ class BV2_OT_generate_guides(bpy.types.Operator):
         
         mod_01 = obj.modifiers.new(name="geometry_nodes_mod", type='NODES')
         mod_01.node_group = bpy.data.node_groups[gg_mod_name_01]
-        #mod1_index = objs.modifiers.find(mod_01.name)
-        #objs.modifiers.move(mod1_index, 0)
-        
-        modName = obj.modifiers[-1].name
+        obj.modifiers.move(len(obj.modifiers) - 1, 0)
+
+        modName = obj.modifiers[0].name
         obj.modifiers[modName]["Input_2"] = obj.parent
         obj.modifiers[modName]["Input_18_attribute_name"] = bpy.data.hair_curves[obj.data.name].surface_uv_map
         return{'FINISHED'}
@@ -474,9 +492,6 @@ class BV2_OT_apply_guides(bpy.types.Operator):
         else:
             obj = context.active_object
 
-        ntID = get_gNode(obj)[2]
-        if not ntID == nodeID_4:
-            return False
         return context.mode == "OBJECT" or "SCULPT_CURVES" or "EDIT"
     
     def execute(self, context):
@@ -497,7 +512,7 @@ class BV2_OT_apply_guides(bpy.types.Operator):
             obj = context.active_object
         
         if len(obj.modifiers) > 0:
-            first_modifier = obj.modifiers[-1]
+            first_modifier = obj.modifiers[0]
             
             if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
                 bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = False
@@ -551,10 +566,6 @@ class BV2_OT_delete_guides(bpy.types.Operator):
         else:
             obj = context.active_object
 
-        ntID = get_gNode(obj)[2]
-        if not ntID == nodeID_4:
-            return False
-        
         return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
     
     def execute(self, context):
@@ -574,109 +585,11 @@ class BV2_OT_delete_guides(bpy.types.Operator):
         else:
             obj = context.active_object
 
-        ntID = get_gNode(obj)[2]
-        if not ntID == nodeID_4:
-            return False
-        objs = obj
-        #objs = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        #while objs.modifiers:
-        objs.modifiers.remove(objs.modifiers[-1])
+        obj.modifiers.remove(obj.modifiers[0])
             
         return{'FINISHED'}    
-
-class BV2_OT_remove_sim_collection(bpy.types.Operator):
-    """ Remove Sim Collection """
-    bl_idname = "object.bv2_remove_sim_collection"
-    bl_label = "Remove Sim Collection"
-    bl_options = {'REGISTER', 'UNDO'}
-    
-    @classmethod
-    def poll(cls, context):
-        active = context.active_object
-        if active is None:
-            return False
-        if get_curveChild(active).type != "CURVES":
-            return False
-        selected_objects = context.selected_objects
-        if selected_objects is None:
-            return False
-        
-        if context.active_object is not None:
-            bv2_tools = context.scene.bv2_tools
-            if bv2_tools.pin_obj == True:
-                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
-                    obj = bpy.context.scene.bv2_tools.pinned_obj
-                else:
-                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
-            else:
-                if bpy.context.active_object.hair_curves_active_index == -1:
-                    obj = context.active_object
-                else:
-                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        else:
-            obj = context.active_object
-
-        if get_gNode(obj)[2] == "ID:BV2_0001":
-            collCntr = bpy.data.node_groups[get_gNode(obj)[1]].nodes["ID:bv2_CC_001"].inputs[1]
-            if collCntr.default_value is None:
-                return False
-        
-        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
-    
-    def execute(self, context):
-        if context.active_object is not None:
-            bv2_tools = context.scene.bv2_tools
-            obj_exp = context.object.bv2_expand
-            if bv2_tools.pin_obj == True:
-                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
-                    obj = bpy.context.scene.bv2_tools.pinned_obj
-                else:
-                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
-            else:
-                if bpy.context.active_object.hair_curves_active_index == -1:
-                    obj = context.active_object
-                else:
-                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        else:
-            obj = context.active_object
-
-
-        if get_gNode(obj)[2] == "ID:BV2_0001":
-            collCntr = bpy.data.node_groups[get_gNode(obj)[1]].nodes["ID:bv2_CC_001"].inputs[1]
-            colls = bpy.data.collections[collCntr.default_value.name]
-
-            for a_obj in bpy.data.objects:
-                if a_obj.type == "CURVES":
-                    if get_gNode(a_obj)[2] == "ID:BV2_0001":
-                        get_gNode(a_obj)[0]["Input_2"] = False
-
-            if colls.name[:4] == "SIM=":
-                for obj in colls.objects:
-                    colls.objects.unlink(obj)
-                    bpy.data.objects.remove(obj)
-                bpy.data.collections.remove(colls) 
-            else:    
-                self.report({"ERROR"},message="Not Valid Sim Guide")
-                return {"CANCELLED"}
-        else:    
-            self.report({"ERROR"},message="Not Valid Sim Guide")
-            return {"CANCELLED"}
-
-        '''if bpy.context.scene.bv2_tools.sim_collection:
-            colls = bpy.data.collections[bpy.context.scene.bv2_tools.sim_collection]
-            for obj in colls.objects:
-                colls.objects.unlink(obj)
-                bpy.data.objects.remove(obj)
-
-            bpy.data.collections.remove(colls) 
-            bgenMod = get_gNode(bpy.data.objects[bpy.context.active_object.hair_curves_active_index])[0]
-            bgenMod["Input_2"] = False
-        else:    
-            self.report({"ERROR"},message="NO SIM COLLECTIONS")
-            return {"CANCELLED"}'''
-
-        return{'FINISHED'}
-      
+#-------------------------------------------------------------------------
+     
 class BV2_OT_choose_nodeTree(bpy.types.Operator):
     """ Choose which bgen Node to use"""
     bl_idname = "object.bv2_choose_nodetree"
@@ -765,7 +678,7 @@ class BV2_OT_choose_vts_nodeTree(bpy.types.Operator):
     vts_nodes:bpy.props.EnumProperty(
         items=lambda self, context: [(b.name, b.name, "") for b in bpy.data.node_groups for bn in b.nodes if bn.name == nodeID_3],
         name="Change Modifier to:",
-        description="Select bgen modifier",)
+        description="Select bgen modifier",) # type: ignore
 
     
     def execute(self, context):
@@ -814,19 +727,19 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
             return False
         return context.mode == "OBJECT" 
     
-    name: bpy.props.StringProperty(name="Curve Name", description="Enter a name for the new hair curve", default="hair_")
+    name: bpy.props.StringProperty(name="Curve Name", description="Enter a name for the new hair curve", default="hair_") # type: ignore
     
     hairType: bpy.props.EnumProperty(
         items=(('EXISTING', "Use Existing", "Use existing bgen modifier"),
                ('NEW', "Create New", "Create with new hair modifier")),
-        default='EXISTING',)
+        default='EXISTING',) # type: ignore
     
     bv2_nodes:bpy.props.EnumProperty(
         items=lambda self, context: [(b.name, b.name, "") for b in bpy.data.node_groups for bn in b.nodes if bn.name == "ID:BV2_0001"],
         name="BV2 Hair Modifiers",
-        description="Select bgen modifier",)
+        description="Select bgen modifier",) # type: ignore
       
-    ng_name: bpy.props.StringProperty(name="Hair Mod name", description="Enter a name for the hair modifier", default="bgen_groom_")
+    ng_name: bpy.props.StringProperty(name="Hair Mod name", description="Enter a name for the hair modifier", default="bgen_groom_") # type: ignore
     
     '''   
     def invoke(self, context, event):
@@ -983,8 +896,14 @@ class BV2_OT_add_empty_hair(bpy.types.Operator):
 
             bgenMod = get_gNode(hc_obj)[0]
             bgenMod.node_group.nodes["ID:bv2_MC_001"].inputs[0].default_value = bpy.data.materials[bgen_hair_shader]
-            hc_obj.hide_select = True
+
+            mat = bpy.data.materials[bgen_hair_shader]
+            if hc_obj.data.materials:
+                hc_obj.data.materials[0] = mat
+            else:
+                hc_obj.data.materials.append(mat)
             
+            hc_obj.hide_select = True
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.view_layer.objects.active = hc_obj
             
@@ -1470,6 +1389,7 @@ class BV2_OT_create_sculpt_guide(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 '''
 
+#---------------------------------------------------------------------------------------------
 def convert_to_mesh(obj,int):
     # Duplicate the object
     new_obj = obj.copy()
@@ -1487,7 +1407,9 @@ def convert_to_mesh(obj,int):
     group = bpy.data.node_groups.get(rc_mod_name_01)
     mod = new_obj.modifiers.new(name="resample_mod", type='NODES')
     mod.node_group = group
-    bpy.data.node_groups[rc_mod_name_01].nodes["ID:resample_curve"].inputs[2].default_value = int
+    new_obj.modifiers[0]["Socket_0"] = False
+    bpy.data.node_groups[rc_mod_name_01].nodes["ID:Resample_node"].mode = "COUNT"
+    bpy.data.node_groups[rc_mod_name_01].nodes["ID:Resample_node"].inputs[2].default_value = int
     bpy.ops.object.convert(target='MESH')
     
     return new_obj
@@ -1569,9 +1491,9 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
     try:
         collision_collection: bpy.props.EnumProperty(
             items=lambda self, context: [(c.name, c.name, "") for c in context.scene.collection.children],
-            name="Collision Collection")
+            name="Collision Collection") # type: ignore
         
-        resolution : bpy.props.IntProperty(name= "Resolution", soft_min= 0, soft_max= 50, default= (16))
+        resolution : bpy.props.IntProperty(name= "Resolution", soft_min= 0, soft_max= 50, default= (16)) # type: ignore
         
         def execute(self, context):
             if context.active_object is not None:
@@ -1615,6 +1537,17 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             obj = bpy.context.active_object
             obj.name = "SIM=[" + obj_.name + "]"
             obj_.hide_select = True
+
+            #Add Surface deform mod
+            #--------------------------------------------------------------------------
+            mod_00 = obj.modifiers.new(name="SurfaceDeform" , type="SURFACE_DEFORM")
+            surface_deform_mod = obj.modifiers["SurfaceDeform"]
+            surface_deform_mod.target = obj_.parent
+            bpy.ops.object.surfacedeform_bind(modifier="SurfaceDeform")
+            
+
+            #--------------------------------------------------------------------------
+
             #--------------------------------------------------------------------------
 
             if obj.name not in vts_nodes():
@@ -1649,15 +1582,27 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             #mod_02 = obj.modifiers.new(name="Cloth", type='CLOTH')
             cloth_modifier = obj.modifiers["Cloth"]    
             cloth_modifier.settings.vertex_group_mass = "Group"  # Sets Pin group
+            cloth_modifier.settings.air_damping = 4  # Air_Viscosity
+            surface_deform_mod.vertex_group = "Group" # Sets Surface deform Group
             cloth_modifier.collision_settings.vertex_group_object_collisions = "" # Sets Collision group
-            cloth_modifier.collision_settings.distance_min = 0.001
+            cloth_modifier.collision_settings.distance_min = 0.004
             cloth_modifier.collision_settings.self_distance_min = 0.001
             cloth_modifier.settings.effector_weights.all = 100
+            cloth_modifier.settings.pin_stiffness = 2
             if self.collision_collection == "":
                 pass
                 #cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
             else:
                 cloth_modifier.collision_settings.collection = bpy.data.collections[self.collision_collection]
+            #--------------------------------------------------------------------------
+            #Add Surface deform mod
+            #--------------------------------------------------------------------------
+            obj.modifiers.new(name="Smooth" , type="SMOOTH")
+            smooth_mod = obj.modifiers["Smooth"]
+            smooth_mod.show_viewport = False
+            smooth_mod.show_render = False
+            smooth_mod.vertex_group = "Group"
+            smooth_mod.invert_vertex_group = True
             #--------------------------------------------------------------------------
             if stc_mod_name_01 not in bpy.data.node_groups:
                 ''' Gets VTS modifier from resouorce file''' 
@@ -1715,7 +1660,101 @@ class BV2_OT_create_sim_guides(bpy.types.Operator):
             return {'FINISHED'}
     except:
         pass
+
+class BV2_OT_remove_sim_collection(bpy.types.Operator):
+    """ Remove Sim Collection """
+    bl_idname = "object.bv2_remove_sim_collection"
+    bl_label = "Remove Sim Collection"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        if get_curveChild(active).type != "CURVES":
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
         
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        if get_gNode(obj)[2] == "ID:BV2_0001":
+            collCntr = bpy.data.node_groups[get_gNode(obj)[1]].nodes["ID:bv2_CC_001"].inputs[1]
+            if collCntr.default_value is None:
+                return False
+        
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+
+        if get_gNode(obj)[2] == "ID:BV2_0001":
+            collCntr = bpy.data.node_groups[get_gNode(obj)[1]].nodes["ID:bv2_CC_001"].inputs[1]
+            colls = bpy.data.collections[collCntr.default_value.name]
+
+            for a_obj in bpy.data.objects:
+                if a_obj.type == "CURVES":
+                    if get_gNode(a_obj)[2] == "ID:BV2_0001":
+                        get_gNode(a_obj)[0]["Input_2"] = False
+
+            if colls.name[:4] == "SIM=":
+                for obj in colls.objects:
+                    colls.objects.unlink(obj)
+                    bpy.data.objects.remove(obj)
+                bpy.data.collections.remove(colls) 
+            else:    
+                self.report({"ERROR"},message="Not Valid Sim Guide")
+                return {"CANCELLED"}
+        else:    
+            self.report({"ERROR"},message="Not Valid Sim Guide")
+            return {"CANCELLED"}
+
+        '''if bpy.context.scene.bv2_tools.sim_collection:
+            colls = bpy.data.collections[bpy.context.scene.bv2_tools.sim_collection]
+            for obj in colls.objects:
+                colls.objects.unlink(obj)
+                bpy.data.objects.remove(obj)
+
+            bpy.data.collections.remove(colls) 
+            bgenMod = get_gNode(bpy.data.objects[bpy.context.active_object.hair_curves_active_index])[0]
+            bgenMod["Input_2"] = False
+        else:    
+            self.report({"ERROR"},message="NO SIM COLLECTIONS")
+            return {"CANCELLED"}'''
+
+        return{'FINISHED'}
+ 
+#---------------------------------------------------------------------------------------------        
 class BV2_OT_duplicate_hair(bpy.types.Operator):
     """Dupicates higlighted hair curve"""
     bl_idname = "object.bv2_duplicate_hair"
@@ -1855,18 +1894,22 @@ class BV2_OT_groom_curve(bpy.types.Operator):
                     bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = False
                     bpy.context.view_layer.objects.active =  bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
                     bpy.data.objects[bpy.context.active_object.hair_curves_active_index].select_set(True)
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    bpy.ops.object.select_all(action='DESELECT')
                     bpy.ops.object.mode_set(mode='SCULPT_CURVES', toggle=False)
                     bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = True
                     
                 if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == False:
                     bpy.context.view_layer.objects.active =  bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
                     bpy.data.objects[bpy.context.active_object.hair_curves_active_index].select_set(True)
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                    bpy.ops.object.select_all(action='DESELECT')
                     bpy.ops.object.mode_set(mode='SCULPT_CURVES', toggle=False)
 
                 
-             
         except:
             pass
+
         return {'FINISHED'} 
 
 class BV2_OT_rescale_hair(bpy.types.Operator):
@@ -2010,95 +2053,6 @@ class BV2_OT_rescale_hair(bpy.types.Operator):
             bpy.context.view_layer.objects.active = obj_.parent
         return {'FINISHED'}
 
-class BV2_OT_resample_guides(bpy.types.Operator):
-    """Resamples the nuber of control points on a guide"""
-    bl_idname = "object.bv2_resample_guides"
-    bl_label = "Resample guide"
-    bl_options = {'REGISTER', 'UNDO'}
-    
-    @classmethod
-    def poll(cls, context):
-        active = context.active_object
-        if active is None:
-            return False
-        selected_objects = context.selected_objects
-        if selected_objects is None:
-            return False
-        if context.active_object is not None:
-            bv2_tools = context.scene.bv2_tools
-            obj_exp = context.object.bv2_expand
-            if bv2_tools.pin_obj == True:
-                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
-                    obj = bpy.context.scene.bv2_tools.pinned_obj
-                else:
-                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
-            else:
-                if bpy.context.active_object.hair_curves_active_index == -1:
-                    obj = context.active_object
-                else:
-                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        else:
-            obj = context.active_object
-
-        ntID = get_gNode(obj)[2]
-        if not ntID == nodeID_1:
-            return False
-        
-        if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
-            return False
-        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
-    
-    
-    resample : bpy.props.IntProperty(name= "Point count", soft_min= 4, soft_max= 50, default= (12))
-
-    def invoke(self, context, event):
-        # Display a popup asking for the collection name
-        return context.window_manager.invoke_props_dialog(self)
-    
-    def execute(self, context):
-        bpy.ops.object.mode_set(mode='OBJECT')
-        if context.active_object is not None:
-            bv2_tools = context.scene.bv2_tools
-            obj_exp = context.object.bv2_expand
-            if bv2_tools.pin_obj == True:
-                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
-                    obj = bpy.context.scene.bv2_tools.pinned_obj
-                else:
-                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
-            else:
-                if bpy.context.active_object.hair_curves_active_index == -1:
-                    obj = context.active_object
-                else:
-                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        else:
-            obj = context.active_object
-
-        obj_ = obj
-        #obj_ = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
-        if rc_mod_name_01 not in bpy.data.node_groups:
-            ''' Gets VTS modifier from resouorce file''' 
-            dirpath = os.path.dirname(os.path.realpath(__file__))
-            resource_folder = os.path.join(dirpath,"resources")
-            nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
-
-            with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
-                data_to.node_groups = [rc_mod_name_01]
-        group = bpy.data.node_groups.get(rc_mod_name_01)
-        mod = obj_.modifiers.new(name="Resample_Guides", type='NODES')
-        mod.node_group = group
-        bpy.data.node_groups[rc_mod_name_01].nodes["ID:resample_curve"].inputs[2].default_value = self.resample
-        bpy.ops.object.select_all(action='DESELECT')
-        obj_.select_set(True)
-        bpy.context.view_layer.objects.active = obj_
-        bpy.ops.object.modifier_apply(modifier=mod.name,report = True)
-
-        obj_.hide_select = False
-        bpy.context.view_layer.objects.active =  obj_
-        obj_.select_set(True)
-        bpy.ops.object.mode_set(mode="SCULPT_CURVES")
-
-        return {'FINISHED'}
-
 class BV2_OT_execute_cloth_settings(bpy.types.Operator):
     ''' Executes the settings from the parameters above'''
     bl_label = "EXECUTE SIM VALUES"
@@ -2183,23 +2137,28 @@ class BV2_OT_execute_cloth_settings(bpy.types.Operator):
         self.report({"INFO"},message="Sim Values EXECUTED")
         return {'FINISHED'} 
 
+#---------------------------------------------------------------------------------------------
 class BV2_OT_bake_hair_sim(bpy.types.Operator):
     bl_idname = "object.bake_hair_sim"
     bl_label = "Bake Dynamics"
-    bl_description = "Bake all dynamics in the specified collection"
+    bl_description = "Bake Hair simulation"
 
     @classmethod
     def poll(cls, context):
-        return context.mode == 'OBJECT'
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        return context.mode == "OBJECT"
 
-    
     def execute(self, context):
         if bpy.context.scene.bv2_tools.sim_collection == "":
             pass
         else:
             if context.active_object is not None:
                 bv2_tools = context.scene.bv2_tools
-                obj_exp = context.object.bv2_expand
                 if bv2_tools.pin_obj == True:
                     if bv2_tools.pinned_obj.hair_curves_active_index == -1:
                         obj = bpy.context.scene.bv2_tools.pinned_obj
@@ -2213,15 +2172,249 @@ class BV2_OT_bake_hair_sim(bpy.types.Operator):
             else:
                 obj = context.active_object
 
-            bgenMod = get_gNode(obj)[0]
-            mod_sim_data = bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value.name
+            bgen_node_name = get_gNode(obj)[1]
+            sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+            sim_obj = bpy.data.collections[sim_col.name].objects[0]
+            is_baked = sim_obj.modifiers["Cloth"].point_cache.is_baked
 
-            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[mod_sim_data].exclude = False
-            bpy.ops.ptcache.bake_all(bake=True)
-            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[mod_sim_data].exclude = True
+            if is_baked == True:
+                with bpy.context.temp_override(scene=context.scene, active_object=sim_obj, point_cache=sim_obj.modifiers["Cloth"].point_cache):
+                    bpy.ops.ptcache.free_bake()
+            else:
+                with bpy.context.temp_override(scene=context.scene, active_object=sim_obj, point_cache=sim_obj.modifiers["Cloth"].point_cache):
+                    bpy.ops.ptcache.bake(bake=True)
+
         self.report({"INFO"},message="SIM BAKE FINISHED")
         return {'FINISHED'}
 
+class BV2_OT_calculate_to_frame(bpy.types.Operator):
+    bl_idname = "object.calculate_to_frame"
+    bl_label = "Bake Dynamics"
+    bl_description = "Get correct simulation at Frame"
+
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        #----------------------------------------------------------------------------------------------
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+        bgen_node_name = get_gNode(obj)[1]
+        sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+        sim_obj = bpy.data.collections[sim_col.name].objects[0]
+        is_baked = sim_obj.modifiers["Cloth"].point_cache.is_baked
+        if is_baked == True:
+            return False
+        #----------------------------------------------------------------------------------------------
+        return context.mode == "OBJECT"
+
+    def execute(self, context):
+        if bpy.context.scene.bv2_tools.sim_collection == "":
+            pass
+        else:
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            bgen_node_name = get_gNode(obj)[1]
+            sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+            sim_obj = bpy.data.collections[sim_col.name].objects[0]
+            is_baked = sim_obj.modifiers["Cloth"].point_cache.is_baked
+
+            with bpy.context.temp_override(scene=context.scene, active_object=sim_obj, point_cache=sim_obj.modifiers["Cloth"].point_cache):
+                bpy.ops.ptcache.bake(bake=False)
+
+        self.report({"INFO"},message="FINISHED")
+        return {'FINISHED'}
+
+class BV2_OT_current_cache_to_bake(bpy.types.Operator):
+    bl_idname = "object.current_cache_to_bake"
+    bl_label = "Bake Dynamics"
+    bl_description = "Convert current Cache to bake"
+
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        #----------------------------------------------------------------------------------------------
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+        bgen_node_name = get_gNode(obj)[1]
+        sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+        sim_obj = bpy.data.collections[sim_col.name].objects[0]
+        is_baked = sim_obj.modifiers["Cloth"].point_cache.is_baked
+        if is_baked == True:
+            return False
+        #----------------------------------------------------------------------------------------------
+        return context.mode == "OBJECT"
+
+    def execute(self, context):
+        if bpy.context.scene.bv2_tools.sim_collection == "":
+            pass
+        else:
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            bgen_node_name = get_gNode(obj)[1]
+            sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+            sim_obj = bpy.data.collections[sim_col.name].objects[0]
+            is_baked = sim_obj.modifiers["Cloth"].point_cache.is_baked
+
+
+            with bpy.context.temp_override(scene=context.scene, active_object=sim_obj, point_cache=sim_obj.modifiers["Cloth"].point_cache):
+                bpy.ops.ptcache.bake_from_cache()
+
+        self.report({"INFO"},message="FINISHED")
+        return {'FINISHED'}
+
+class BV2_OT_bake_all_dynamics(bpy.types.Operator):
+    bl_idname = "object.bake_all_dynamics"
+    bl_label = "Bake Dynamics"
+    bl_description = "Bake all dynamics"
+
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        return context.mode == "OBJECT"
+
+    def execute(self, context):
+        if bpy.context.scene.bv2_tools.sim_collection == "":
+            pass
+        else:
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            bgen_node_name = get_gNode(obj)[1]
+            sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+            sim_obj = bpy.data.collections[sim_col.name].objects[0]
+            is_baked = sim_obj.modifiers["Cloth"].point_cache.is_baked
+
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = False
+            with bpy.context.temp_override(scene=context.scene, active_object=sim_obj, point_cache=sim_obj.modifiers["Cloth"].point_cache):
+                bpy.ops.ptcache.bake_all(bake=True)
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = True
+        self.report({"INFO"},message="ALL BAKES FINISHED")
+        return {'FINISHED'}
+
+class BV2_OT_delete_all_bakes(bpy.types.Operator):
+    bl_idname = "object.delete_all_bakes"
+    bl_label = "Bake Dynamics"
+    bl_description = "Delete all Bakes"
+
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        return context.mode == "OBJECT"
+
+    def execute(self, context):
+        if bpy.context.scene.bv2_tools.sim_collection == "":
+            pass
+        else:
+            if context.active_object is not None:
+                bv2_tools = context.scene.bv2_tools
+                if bv2_tools.pin_obj == True:
+                    if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                        obj = bpy.context.scene.bv2_tools.pinned_obj
+                    else:
+                        obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+                else:
+                    if bpy.context.active_object.hair_curves_active_index == -1:
+                        obj = context.active_object
+                    else:
+                        obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+            else:
+                obj = context.active_object
+
+            bgen_node_name = get_gNode(obj)[1]
+            sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+            sim_obj = bpy.data.collections[sim_col.name].objects[0]
+            is_baked = sim_obj.modifiers["Cloth"].point_cache.is_baked
+
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = False
+            with bpy.context.temp_override(scene=context.scene, active_object=sim_obj, point_cache=sim_obj.modifiers["Cloth"].point_cache):
+                bpy.ops.ptcache.free_bake_all()
+            bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = True
+        self.report({"INFO"},message="ALL BAKES DELETED")
+        return {'FINISHED'}
+
+#---------------------------------------------------------------------------------------------
 class BV2_OT_fix_hair_position(bpy.types.Operator):
     """Fixes the position of haircurves"""
     bl_idname = "object.bv2_fix_hair_position"
@@ -2494,7 +2687,924 @@ class BV2_MT_operator_menu(bpy.types.Menu):
         col.operator("object.add_bgen_groom", text="Add BGEN groom mod", icon = "ADD")
         col.operator("object.remove_bgen_groom", text="Remove BGEN groom", icon = "REMOVE") 
         col.operator("object.bv2_fix_hair_position", text="Fix Hair Position", icon = "TOOL_SETTINGS")
-           
+
+class BV2_OT_SurfaceDeformBind(bpy.types.Operator):
+    bl_idname = "object.surface_deform_bind"
+    bl_label = "Bind Surface Deform"
+    bl_description = "Bind the Surface Deform modifier"
+
+    @classmethod
+    def poll(cls, context):
+        return context.object 
+
+    def execute(self, context):
+        #obj = context.object
+        #modifier = next(mod for mod in obj.modifiers if mod.type == 'SURFACE_DEFORM')
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+        org_mode = bpy.context.mode
+        bgen_node_name = get_gNode(obj)[1]
+        sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+        sim_obj = bpy.data.collections[sim_col.name].objects[0]
+        
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = False
+        bpy.context.view_layer.objects.active = sim_obj
+        bpy.ops.object.surfacedeform_bind(modifier = sim_obj.modifiers[0].name)
+        bpy.context.view_layer.objects.active = obj
+        bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = True
+        
+        bpy.ops.object.mode_set(mode = org_mode)
+        
+        return {'FINISHED'}      
+
+#---------------------------------------------------------------------------------------------
+class BV2_OT_lowpoly_all(bpy.types.Operator):
+    """ Toggle low poly view for all hair on the character"""
+    bl_idname = "object.bv2_lowpoly_all"
+    bl_label = "LowPoly All"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        org_mode = bpy.context.mode
+        if obj.type == "MESH":
+            emitter_obj = obj
+        elif obj.type == "CURVES":
+            emitter_obj = obj.parent
+        
+        act_obj = bpy.context.active_object
+        hairCurve_list = []
+        for hair_obj in bpy.data.objects:
+            
+            if hair_obj.parent == emitter_obj and hair_obj.type == "CURVES":
+                if get_gNode(hair_obj)[2] == nodeID_1:
+                    if hair_obj.hide_viewport == True:
+                        hair_obj.hide_viewport = False
+                        hairCurve_list.append(hair_obj)
+                        modName = get_gNode(hair_obj)[0]
+                        modName["Input_42"] = True
+                        hair_obj.hide_viewport =True
+                    else:
+                        hairCurve_list.append(hair_obj)
+                        modName = get_gNode(hair_obj)[0]
+                        modName["Input_42"] = True
+
+        if hairCurve_list[0].hide_viewport == True:
+            hairCurve_list[0].hide_viewport = False
+            bpy.context.view_layer.objects.active = hairCurve_list[0]
+
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.editmode_toggle()
+            #bpy.ops.object.mode_set(mode = org_mode)
+
+            hairCurve_list[0].hide_viewport = True
+        else:
+            bpy.context.view_layer.objects.active = hairCurve_list[0]
+
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.editmode_toggle()
+            #bpy.ops.object.mode_set(mode = org_mode)
+        
+        bpy.context.view_layer.objects.active = emitter_obj
+        return {'FINISHED'} 
+
+class BV2_OT_highpoly_all(bpy.types.Operator):
+    """ Toggle high poly view for all hair on the character"""
+    bl_idname = "object.bv2_highpoly_all"
+    bl_label = "HighPoly All"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    def execute(self, context):
+        
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        org_mode = bpy.context.mode
+        if obj.type == "MESH":
+            emitter_obj = obj
+        elif obj.type == "CURVES":
+            emitter_obj = obj.parent
+        
+        act_obj = bpy.context.active_object
+        hairCurve_list = []
+        for hair_obj in bpy.data.objects:
+            
+            if hair_obj.parent == emitter_obj and hair_obj.type == "CURVES":
+                if get_gNode(hair_obj)[2] == nodeID_1:
+                    if hair_obj.hide_viewport == True:
+                        hair_obj.hide_viewport = False
+                        hairCurve_list.append(hair_obj)
+                        modName = get_gNode(hair_obj)[0]
+                        modName["Input_42"] = False
+                        hair_obj.hide_viewport =True
+                    else:
+                        hairCurve_list.append(hair_obj)
+                        modName = get_gNode(hair_obj)[0]
+                        modName["Input_42"] = False
+
+        if hairCurve_list[0].hide_viewport == True:
+            hairCurve_list[0].hide_viewport = False
+            bpy.context.view_layer.objects.active = hairCurve_list[0]
+
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.editmode_toggle()
+            #bpy.ops.object.mode_set(mode = org_mode)
+
+            hairCurve_list[0].hide_viewport = True
+        else:
+            bpy.context.view_layer.objects.active = hairCurve_list[0]
+
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.editmode_toggle()
+            #bpy.ops.object.mode_set(mode = org_mode)
+        bpy.context.view_layer.objects.active = emitter_obj
+        return {'FINISHED'} 
+#---------------------------------------------------------------------------------------------
+class BV2_OT_resample_guides(bpy.types.Operator):
+    """Resamples the nuber of control points on a guide"""
+    bl_idname = "object.bv2_resample_guides"
+    bl_label = "Resample guide"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
+        
+        if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+            return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    
+    def execute(self, context):
+        org_mode = bpy.context.mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        if rc_mod_name_01 not in bpy.data.node_groups:
+            ''' Gets VTS modifier from resouorce file''' 
+            dirpath = os.path.dirname(os.path.realpath(__file__))
+            resource_folder = os.path.join(dirpath,"resources")
+            nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+            with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
+                data_to.node_groups = [rc_mod_name_01]
+
+        group = bpy.data.node_groups.get(rc_mod_name_01)
+        mod = obj.modifiers.new(name="Resample_Guides", type='NODES')
+        mod.node_group = group
+        obj.modifiers.move(len(obj.modifiers) - 1, 0)
+
+        modName = obj.modifiers[0].name
+        if obj.type == "CURVES":
+            obj.modifiers[modName]["Socket_0"] = False
+        elif obj.typw == "MESH":
+            obj.modifiers[modName]["Socket_0"] = True
+        
+        bpy.ops.object.mode_set(mode = org_mode)
+        return {'FINISHED'}
+
+class BV2_OT_apply_resample_guides(bpy.types.Operator):
+    """Applies the Guides modifier"""
+    bl_idname = "object.bv2_apply_resample_guides"
+    bl_label = "Apply Guides"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        return context.mode == "OBJECT" or "SCULPT_CURVES" or "EDIT"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+        
+        org_mode = bpy.context.mode
+        if len(obj.modifiers) > 0:
+            first_modifier = obj.modifiers[0]
+            
+            if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+                bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = False
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+                bpy.context.view_layer.objects.active = obj
+                bpy.ops.object.modifier_apply(modifier=first_modifier.name)
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.curves.sculptmode_toggle()
+                bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = True
+                
+            else:
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+                bpy.context.view_layer.objects.active = obj
+                bpy.ops.object.modifier_apply(modifier=first_modifier.name)
+
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.mode_set(mode = org_mode)
+
+        return{'FINISHED'}
+
+class BV2_OT_delete_resample_guides(bpy.types.Operator):
+    """Deletes the Guides modifier"""
+    bl_idname = "object.bv2_delete_resample_guides"
+    bl_label = "Delete Guides"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+  
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        obj.modifiers.remove(obj.modifiers[0])
+            
+        return{'FINISHED'}    
+#---------------------------------------------------------------------------------------------
+class BV2_OT_resample_sim_guides(bpy.types.Operator):
+    """Resamples the nuber of control points on a guide"""
+    bl_idname = "object.bv2_resample_sim_guides"
+    bl_label = "Resample guide"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
+        
+        if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+            return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    
+    def execute(self, context):
+        org_mode = bpy.context.mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        if rc_mod_name_01 not in bpy.data.node_groups:
+            ''' Gets VTS modifier from resouorce file''' 
+            dirpath = os.path.dirname(os.path.realpath(__file__))
+            resource_folder = os.path.join(dirpath,"resources")
+            nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+            with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
+                data_to.node_groups = [rc_mod_name_01]
+
+        
+        bgen_node_name = get_gNode(obj)[1]
+        sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+        sim_obj = bpy.data.collections[sim_col.name].objects[0]
+        bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = False
+
+        group = bpy.data.node_groups.get(rc_mod_name_01)
+        mod = sim_obj.modifiers.new(name="Resample_Guides", type='NODES')
+        mod.node_group = group
+        sim_obj.modifiers.move(len(sim_obj.modifiers) - 1, 0)
+
+        modName = sim_obj.modifiers[0].name
+        if sim_obj.type == "CURVES":
+            sim_obj.modifiers[modName]["Socket_0"] = False
+        elif sim_obj.type == "MESH":
+            sim_obj.modifiers[modName]["Socket_0"] = True
+        
+        bpy.ops.object.mode_set(mode = org_mode)
+        return {'FINISHED'}
+
+class BV2_OT_apply_resample_sim_guides(bpy.types.Operator):
+    """Applies the Guides modifier"""
+    bl_idname = "object.bv2_apply_resample_sim_guides"
+    bl_label = "Apply Guides"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        return context.mode == "OBJECT" or "SCULPT_CURVES" or "EDIT"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+        
+        org_mode = bpy.context.mode
+
+        bgen_node_name = get_gNode(obj)[1]
+        sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+        sim_obj = bpy.data.collections[sim_col.name].objects[0]
+        bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = False
+        if len(sim_obj.modifiers) > 0:
+            first_modifier = sim_obj.modifiers[0]
+            
+            if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+                bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = False
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+                bpy.context.view_layer.objects.active = sim_obj
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.select_all(action='DESELECT')
+                bpy.ops.object.modifier_apply(modifier=first_modifier.name)
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.editmode_toggle()
+
+                
+                bpy.ops.object.mode_set(mode = "OBJECT")
+                bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = True
+                
+            else:
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.select_all(action='DESELECT')
+                bpy.context.view_layer.objects.active = sim_obj
+                bpy.ops.object.modifier_apply(modifier=first_modifier.name)
+
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.editmode_toggle()
+                
+                bpy.ops.object.mode_set(mode = "OBJECT")
+
+        # Remove all vertex groups from the object
+        for group in sim_obj.vertex_groups:
+            sim_obj.vertex_groups.remove(group)
+        # Add a new vertex group to the object
+        sim_obj.vertex_groups.new(name="Group")
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.editmode_toggle()
+        bpy.ops.object.editmode_toggle()
+
+        for mod in sim_obj.modifiers:                  
+            if mod.type == 'SURFACE_DEFORM':
+                surface_deform_mod = sim_obj.modifiers[mod.name]
+                if surface_deform_mod.is_bound:
+                    bpy.ops.object.surfacedeform_bind(modifier = mod.name)
+                    bpy.ops.object.surfacedeform_bind(modifier = mod.name)
+                else:
+                    bpy.ops.object.surfacedeform_bind(modifier = mod.name)
+                
+
+        bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = True
+        bpy.context.view_layer.objects.active = obj
+        return{'FINISHED'}
+
+class BV2_OT_delete_resample_sim_guides(bpy.types.Operator):
+    """Deletes the Guides modifier"""
+    bl_idname = "object.bv2_delete_resample_sim_guides"
+    bl_label = "Delete Guides"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+  
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        bgen_node_name = get_gNode(obj)[1]
+        sim_col = bpy.data.node_groups[bgen_node_name].nodes["ID:bv2_CC_001"].inputs[1].default_value
+        sim_obj = bpy.data.collections[sim_col.name].objects[0]
+        
+        bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = False
+        sim_obj.modifiers.remove(sim_obj.modifiers[0])
+        bpy.data.scenes[bpy.context.scene.name].view_layers[bpy.context.view_layer.name].layer_collection.children[sim_col.name].exclude = True
+        bpy.context.view_layer.objects.active = obj
+        return{'FINISHED'}    
+#---------------------------------------------------------------------------------------------
+class BV2_OT_mirror_guides(bpy.types.Operator):
+    """Mirrors or Symetrizes the hair guides"""
+    bl_idname = "object.bv2_mirror_guides"
+    bl_label = "Mirror guide"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        ntID = get_gNode(obj)[2]
+        if not ntID == nodeID_1:
+            return False
+        
+        if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+            return False
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    
+    def execute(self, context):
+        org_mode = bpy.context.mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        if mc_mod_name_01 not in bpy.data.node_groups:
+            ''' Gets VTS modifier from resouorce file''' 
+            dirpath = os.path.dirname(os.path.realpath(__file__))
+            resource_folder = os.path.join(dirpath,"resources")
+            nodelib_path = os.path.join(resource_folder, "bgen_v2_nodes.blend")
+
+            with bpy.data.libraries.load(nodelib_path, link=False) as (data_from, data_to):
+                data_to.node_groups = [mc_mod_name_01]
+
+        group = bpy.data.node_groups.get(mc_mod_name_01)
+        mod = obj.modifiers.new(name="Mirror_Guides", type='NODES')
+        mod.node_group = group
+        obj.modifiers.move(len(obj.modifiers) - 1, 0)
+
+        modName = obj.modifiers[0].name
+
+        bpy.ops.object.mode_set(mode = org_mode)
+        return {'FINISHED'}
+
+class BV2_OT_apply_mirror_guides(bpy.types.Operator):
+    """Applies the Guides modifier"""
+    bl_idname = "object.bv2_apply_mirror_guides"
+    bl_label = "Apply Guides"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        return context.mode == "OBJECT" or "SCULPT_CURVES" or "EDIT"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+        
+        org_mode = bpy.context.mode
+        if len(obj.modifiers) > 0:
+            first_modifier = obj.modifiers[0]
+            
+            if bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport == True:
+                bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = False
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+                bpy.context.view_layer.objects.active = obj
+                bpy.ops.object.modifier_apply(modifier=first_modifier.name)
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.curves.sculptmode_toggle()
+                bpy.data.objects[bpy.context.active_object.hair_curves_active_index].hide_viewport = True
+                
+            else:
+                for obj_ in bpy.context.selected_objects:
+                    obj_.select_set(False)
+                bpy.context.view_layer.objects.active = obj
+                bpy.ops.object.modifier_apply(modifier=first_modifier.name)
+
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.editmode_toggle()
+                bpy.ops.object.mode_set(mode = org_mode)
+
+        return{'FINISHED'}
+
+class BV2_OT_delete_mirror_guides(bpy.types.Operator):
+    """Deletes the Guides modifier"""
+    bl_idname = "object.bv2_delete_mirror_guides"
+    bl_label = "Delete Guides"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        active = context.active_object
+        if active is None:
+            return False
+        selected_objects = context.selected_objects
+        if selected_objects is None:
+            return False
+        
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+  
+        return context.mode == "OBJECT", context.mode == "SCULPT_CURVES"
+    
+    def execute(self, context):
+        if context.active_object is not None:
+            bv2_tools = context.scene.bv2_tools
+            obj_exp = context.object.bv2_expand
+            if bv2_tools.pin_obj == True:
+                if bv2_tools.pinned_obj.hair_curves_active_index == -1:
+                    obj = bpy.context.scene.bv2_tools.pinned_obj
+                else:
+                    obj = bpy.data.objects[bpy.context.scene.bv2_tools.pinned_obj.hair_curves_active_index]
+            else:
+                if bpy.context.active_object.hair_curves_active_index == -1:
+                    obj = context.active_object
+                else:
+                    obj = bpy.data.objects[bpy.context.active_object.hair_curves_active_index]
+        else:
+            obj = context.active_object
+
+        obj.modifiers.remove(obj.modifiers[0])
+            
+        return{'FINISHED'}    
+
 
 #=========================================================================================================    
 # 01 ---------------------------   [TEMPLATE LIST IMPLIMENTATION]
@@ -2698,98 +3808,98 @@ class BV2_PT_bv2Properties(bpy.types.PropertyGroup):
     clumpChoice: bpy.props.EnumProperty(
         items=(('BIGCLUMP', "Guide Clump", "Guide Clump Profile"),
                ('SMALLCLUMP', "Interpulated Clump", "Interpulated Clump Profile")),
-        default='BIGCLUMP')
+        default='BIGCLUMP') # type: ignore
         
     guideChoice: bpy.props.EnumProperty(
         items=(('GUIDES', "Guides", "Hair Guide Control"),
                ('STRANDS', "Hair Stands", "Hair Strands control")),
-        default='GUIDES')
+        default='GUIDES') # type: ignore
         
     curlType: bpy.props.EnumProperty(
         items=(('TYPE1', "Type 1", "Curl type 1"),
                ('TYPE2', "Type 2", "Curl type 2")),
-        default='TYPE1')
+        default='TYPE1') # type: ignore
     
     mattren: bpy.props.EnumProperty(
         items=(('EEVEE', "Eevee", "Rendered with Eevee"),
                ('CYCLES', "Cycles", "Rendered with Cycles")),
-        default='EEVEE')
+        default='EEVEE') # type: ignore
     
     material_color: bpy.props.EnumProperty(
         items=(('STRAND', "Strand", "Takes Color of Strand"),
                ('SURFACE', "Surface", "Inherits the color of the surface")),
-        default='STRAND')
+        default='STRAND') # type: ignore
         
     utilDrawer: bpy.props.EnumProperty(
         items=(('INITIALIZE', "Initialize", "Set up hair Curve"),
                ('DEFORMERS', "Deformers", "Add deformers to hair curve"),
                ('SIMULATION', "Simulation", "Simulate hair curves")),
-        default='INITIALIZE')
+        default='INITIALIZE') # type: ignore
     
-    my_string1 : bpy.props.StringProperty(name= "")
-    my_string2 : bpy.props.StringProperty(name= "")
+    my_string1 : bpy.props.StringProperty(name= "") # type: ignore
+    my_string2 : bpy.props.StringProperty(name= "") # type: ignore
     
-    ntName : bpy.props.StringProperty(name= "")
+    ntName : bpy.props.StringProperty(name= "") # type: ignore
     
-    my_int1 : bpy.props.IntProperty(name= "", soft_min= 0, soft_max= 20, default= (5))
+    my_int1 : bpy.props.IntProperty(name= "", soft_min= 0, soft_max= 20, default= (5)) # type: ignore
 
-    sim_start : bpy.props.IntProperty(name= "", soft_min= 0, soft_max= 4000, default= (1),description="Bake to cache starts from frame ...")
-    sim_end : bpy.props.IntProperty(name= "", soft_min= 0, soft_max= 4000, default= (250),description="Bake to cache end in frame ...")
+    sim_start : bpy.props.IntProperty(name= "", soft_min= 0, soft_max= 4000, default= (1),description="Bake to cache starts from frame ...") # type: ignore
+    sim_end : bpy.props.IntProperty(name= "", soft_min= 0, soft_max= 4000, default= (250),description="Bake to cache end in frame ...") # type: ignore
+     
+    my_float1 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 20, default= (0.5),) # type: ignore
+    my_float2 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 1, default= (1)) # type: ignore
+    my_float3 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 50, default= (15)) # type: ignore
+    my_float4 : bpy.props.FloatProperty(name= "", soft_min= 0.01, soft_max= 1, default= (.02)) # type: ignore
+    my_float5 : bpy.props.FloatProperty(name= "", soft_min= 1, soft_max= 50, default= (1)) #Pin Stiffness Value # type: ignore
+    my_float6 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 10, default= (1)) # Air Viscusity # type: ignore
     
-    my_float1 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 20, default= (0.5),)
-    my_float2 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 1, default= (1))
-    my_float3 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 50, default= (15))
-    my_float4 : bpy.props.FloatProperty(name= "", soft_min= 0.01, soft_max= 1, default= (.02))
-    my_float5 : bpy.props.FloatProperty(name= "", soft_min= 1, soft_max= 50, default= (1)) #Pin Stiffness Value
-    my_float6 : bpy.props.FloatProperty(name= "", soft_min= 0, soft_max= 10, default= (1)) # Air Viscusity
     
-    
-    my_float_vector : bpy.props.FloatVectorProperty(name= "", soft_min= 0, soft_max= 20, default= (1,1,1))
+    my_float_vector : bpy.props.FloatVectorProperty(name= "", soft_min= 0, soft_max= 20, default= (1,1,1)) # type: ignore
 
     my_enum : bpy.props.EnumProperty(
         name= "",
         description= "sample text",
-        items= [])
+        items= []) # type: ignore
         
     texture: bpy.props.EnumProperty(
         items=lambda self, context: [(t.name, t.name, "") for t in bpy.data.images if t.type == 'IMAGE'],
         name="Texture",
-        description="Select the texture",)
+        description="Select the texture",) # type: ignore
      
           
     hair_collection:bpy.props.EnumProperty(
         items=lambda self, context: [(c.name, c.name, "") for c in bpy.data.collections],
         name="Hair Collection",
-        description="Select the hair collection",)
+        description="Select the hair collection",) # type: ignore
         
     col_collection:bpy.props.EnumProperty(
         items=lambda self, context: [(c.name, c.name, "") for c in bpy.data.collections],
         name="Collision Collection",
-        description="Select the collision collection",)
+        description="Select the collision collection",) # type: ignore
         
     vts_mod:bpy.props.EnumProperty(
         items=lambda self, context: [(s, s, "") for s in vts_nodes()],
         name="Sim Mod",
-        description="Select sim mod",)
+        description="Select sim mod",) # type: ignore
      
     mattList:bpy.props.EnumProperty(
         items=lambda self, context: [(m.name, m.name, "") for m in get_materials()],
         name="Bgen Materials",
-        description="Select Material",)
+        description="Select Material",) # type: ignore
     
     sim_collection:bpy.props.EnumProperty(
         items=lambda self, context: [(sc.name, sc.name, "") for sc in get_sim_collection()],
         name="Sim Collections",
-        description="List of Sim Collections",)
+        description="List of Sim Collections",) # type: ignore
     
-    simToggle : bpy.props.BoolProperty(name="Sim Toggle",default=True)
+    simToggle : bpy.props.BoolProperty(name="Sim Toggle",default=True) # type: ignore
 
-    disk_cache : bpy.props.BoolProperty(name="Disk Cache",default=False , description="Toggle disk Cache")
+    disk_cache : bpy.props.BoolProperty(name="Disk Cache",default=False , description="Toggle disk Cache") # type: ignore
     
     simToggle_: bpy.props.EnumProperty(
         items=(('ON', "Sim On", "Turn simulation on"),
                ('OFF', "Sim Off", "Turn simulation off")),
-        default='ON')
+        default='ON') # type: ignore
     
     vp_amount: bpy.props.EnumProperty(
         items=(('10', "10%", "10% Viewport amount"),
@@ -2797,7 +3907,7 @@ class BV2_PT_bv2Properties(bpy.types.PropertyGroup):
                ('50', "50%", "50% Viewport amount"),
                ('75', "75%", "75% Viewport amount"),
                ('100', "100%", "100% Viewport amount")),
-        default='100')
+        default='100') # type: ignore
     
 class BV2_PT_bv2ExpandProp(bpy.types.PropertyGroup):
     
@@ -2819,6 +3929,9 @@ class BV2_PT_bv2ExpandProp(bpy.types.PropertyGroup):
     my_exp16 : bpy.props.BoolProperty(default=False) # Hair Curve settings
     my_exp17 : bpy.props.BoolProperty(default=False) # Density Mask
     
+    menu_exp1 : bpy.props.BoolProperty(default=False) # Guide Settings
+    menu_exp2 : bpy.props.BoolProperty(default=False) # Sim Guide Settings
+
     my_expF1 : bpy.props.BoolProperty(default=False)
     my_expF2 : bpy.props.BoolProperty(default=False) 
     my_expF3 : bpy.props.BoolProperty(default=False) # CURL
@@ -2927,7 +4040,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             row_main = box_main.row()
 
             row_label = row_main.row(align=False)
-            row_label.alignment = "LEFT"
+            #row_label.alignment = "LEFT"
 
 
             
@@ -2939,7 +4052,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
             #try: 
 
-            row_label.label(text = obj_ac.name, icon = "OBJECT_DATAMODE")
+            #row_label.label(text = obj_ac.name, icon = "OBJECT_DATAMODE")
+            row_label.prop(obj_ac,"name", text = "",toggle=True, emboss = True, icon="OBJECT_DATAMODE")
             row_pin = row_main.row()
             row_pin.alignment = "RIGHT"
             row_pin.prop(bv2_tools, "pin_obj", text="", icon = "PINNED" if bv2_tools.pin_obj else "UNPINNED", icon_only = True, emboss=False)
@@ -2982,7 +4096,6 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
             col0.template_list("BV2_UL_hair_curves","",bpy.data,"objects",obj_l,"hair_curves_active_index", rows = 4, type = "DEFAULT",columns = 2)
 
-        #elif get_gNode(obj)[2] == "ID:BV2_0001" or get_gNode(obj)[2] == "ID:BV2_GEN_HC": 
         else:
 
             mainCurve = get_curveChild(obj)
@@ -3091,6 +4204,9 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             #col00.separator()
             #col00.operator("object.bv2_rescale_hair", text="", icon = "TOOL_SETTINGS")
             col00.menu("BV2_MT_operator_menu",text="",icon='DOWNARROW_HLT')
+            col00.separator()
+            col00.operator("object.bv2_highpoly_all", text="", icon = "RADIOBUT_ON")
+            col00.operator("object.bv2_lowpoly_all", text="", icon = "RADIOBUT_OFF")  
             
             
 
@@ -3105,6 +4221,24 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                     return
                 else:
                     obj_l = obj.data.surface
+
+            if obj_ac.type == "MESH":
+                row_obj = col0.row(align=True)
+                grid_l = row_obj.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                grid_r = row_obj.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                grid_r.alignment = "LEFT"
+
+                grid_l.prop(obj_ac,"name", text = "",toggle=True, emboss = True, icon="OBJECT_DATAMODE")
+                grid_r.prop(obj_ac,"display_type", text = "")
+
+            if obj_ac.type == "CURVES":
+                row_obj = col0.row(align=True)
+                grid_l = row_obj.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                grid_r = row_obj.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                grid_r.alignment = "LEFT"
+                
+                grid_l.prop(obj_ac.parent,"name", text = "",toggle=True, emboss = True, icon="OBJECT_DATAMODE")
+                grid_r.prop(obj_ac.parent,"display_type", text = "")
 
             col0.template_list("BV2_UL_hair_curves","",bpy.data,"objects",obj_l,"hair_curves_active_index", rows = 4, type = "DEFAULT",columns = 2)
         
@@ -3125,63 +4259,186 @@ class BV2_PT_ui_panel(bpy.types.Panel):
             if bpy.context.scene.bv2_tools.utilDrawer == "INITIALIZE": 
                 #--------------------------------------------------------------------------------------------------------
                 
-                #if obj.modifiers and obj.modifiers[-1].node_group.name == gg_mod_name_01:
-                if obj.modifiers and obj.modifiers[-1].type == "NODES":
-                    if obj.modifiers[-1].node_group.name == gg_mod_name_01:
-                        gcMod = obj.modifiers[-1]
-                        #gcModName = obj.modifiers[-1].node_group.name
-                        
-                        box = col.box()
-                        col1 = box.column()
-                        row1 = col1.row()
-                        col_ = col1.column(align = False)
-                        col_.scale_y = 1.4
-                        
-                        gcMsCntr = obj.modifiers[-1].node_group.nodes["ID:bv2_GC_TM_01"].inputs[0]
-                        gcMsNode = obj.modifiers[-1].node_group.nodes["ID:bv2_GC_TM_01"]
-                        
-                        col_.label(text = "Generate Guide Curves:", icon = "OUTLINER_OB_CURVES")
-                        row_ = col_.row(align = True)
-                        row_.alignment = "RIGHT"
-                        gcMsCntr.draw(context, col_, gcMsNode, text = '')
-                        
-                        box_ = col_.box()
-                        row_ = box_.row(align = False)
-                        row_.scale_y = 1.2
-                        grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
-                        grid_l.alignment = "RIGHT"
-                        grid_l.scale_x = 1.5
-                        grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
-                        
-                        grid_l.label(text = "        Density")
-                        grid_l.label(text = "   Hair Length")
-                        grid_l.label(text = "Control Points")
-                        grid_l.label(text = "           Seed")
-                        
-                        grid_r.prop(gcMod, '["Input_15"]', text = '')
-                        grid_r.prop(gcMod, '["Input_20"]', text = '')
-                        grid_r.prop(gcMod, '["Input_27"]', text = '')
-                        grid_r.prop(gcMod, '["Input_16"]', text = '')
-                        
-                        row_ = col_.row(align = True)
-                        row_.scale_y = 1.2
-                        row_.operator("object.bv2_apply_guides", text = "Apply Guides", icon = "CHECKMARK", depress = True)
-                        row_.operator("object.bv2_delete_guides", text = "Delete Guides", icon = "CANCEL")
-                        
+                if obj.modifiers and obj.modifiers[0].type == "NODES":
+                    box_ = col.box()
+                    col_ = box_.column(align = True)
+                    col_.scale_y = 1.2
+                    row1 = col_.row()
+
+                    #INITIALIZE DRAWER
+                    if obj_exp.menu_exp1:
+                        row1.prop(obj_exp, "menu_exp1",icon="TRIA_DOWN", text="Hair Guides", emboss=False)
+                        row1.prop(bgenMod, '["Input_42"]', text = '')
+
+                        if obj.modifiers[0].node_group.name == gg_mod_name_01:
+                            gcMod = obj.modifiers[0]
+                            box = col_.box()
+                            col1 = box.column()
+                            row1 = col1.row()
+                            col_ = col1.column(align = False)
+                            col_.scale_y = 1
+                            
+                            gcMsCntr = obj.modifiers[0].node_group.nodes["ID:bv2_GC_TM_01"].inputs[0]
+                            gcMsNode = obj.modifiers[0].node_group.nodes["ID:bv2_GC_TM_01"]
+                            
+                            col_.label(text = "Generate Guide Curves:", icon = "OUTLINER_OB_CURVES")
+                            row_ = col_.row(align = True)
+                            row_.alignment = "RIGHT"
+                            gcMsCntr.draw(context, col_, gcMsNode, text = '')
+                            
+                            box_ = col_.box()
+                            row_ = box_.row(align = False)
+                            row_.scale_y = 1.2
+                            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                            grid_l.alignment = "RIGHT"
+                            grid_l.scale_x = 1.5
+                            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                            
+                            grid_l.label(text = "        Density")
+                            grid_l.label(text = "   Hair Length")
+                            grid_l.label(text = "Control Points")
+                            grid_l.label(text = "           Seed")
+                            
+                            grid_r.prop(gcMod, '["Input_15"]', text = '')
+                            grid_r.prop(gcMod, '["Input_20"]', text = '')
+                            grid_r.prop(gcMod, '["Input_27"]', text = '')
+                            grid_r.prop(gcMod, '["Input_16"]', text = '')
+                            
+                            row_ = col_.row(align = True)
+                            row_.scale_y = 1.2
+                            row_.operator("object.bv2_apply_guides", text = "Apply Guides", icon = "CHECKMARK", depress = True)
+                            row_.operator("object.bv2_delete_guides", text = "Delete Guides", icon = "CANCEL")
+                        #------------------------------------------------------------------------------------------------------------------------    
+                        elif obj.modifiers[0].node_group.name == "00_bv2: [Resample Curve]":
+                            box = col_.box()
+                            col1 = box.column()
+                            row1 = col1.row()
+                            col_ = col1.column(align = False)
+                            col_.scale_y = 1
+                            
+                            rg_ng_name = obj.modifiers[0].node_group.name # Resample guide Node Group Name
+                            rg_nt_data = bpy.data.node_groups[rg_ng_name].nodes  #Resample guide NodeTree Data
+
+                            resample_node = rg_nt_data["ID:Resample_node"]
+
+                            col_.label(text = "Resample Curves:", icon = "OUTLINER_OB_CURVES")
+                            box_ = col_.box()
+                            row_ = box_.row(align = False)
+                            row_.scale_y = 1.2
+                            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                            grid_l.alignment = "RIGHT"
+                            grid_l.scale_x = 1.4
+                            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                            
+                            #resample_node.inputs[2].draw(context, grid_r, resample_node, text = '') # Resample Count
+                            
+                            if resample_node.mode == "COUNT":
+                                grid_l.label(text = "    Resample Type")
+                                grid_l.label(text = "Resample Amount")
+
+                                grid_r.prop(resample_node, "mode", text="")
+                                resample_node.inputs[2].draw(context, grid_r, resample_node, text = '') # Resample Count
+                            elif resample_node.mode == "LENGTH":
+                                grid_l.label(text = "Resample Type")
+                                grid_l.label(text = "Resample Amount")
+
+                                grid_r.prop(resample_node, "mode", text="")
+                                resample_node.inputs[3].draw(context, grid_r, resample_node, text = '') # Resample Length
+                            else:
+                                grid_l.label(text = "Resample Type")
+                                grid_r.prop(resample_node, "mode", text="")
+                            
+                            row_ = col_.row(align = True)
+                            row_.scale_y = 1.2
+                            row_.operator("object.bv2_apply_resample_guides", text = "Apply", icon = "CHECKMARK", depress = True)
+                            row_.operator("object.bv2_delete_resample_guides", text = "Delete", icon = "CANCEL")
+                        #------------------------------------------------------------------------------------------------------------------------    
+                        elif obj.modifiers[0].node_group.name == "00_bgen_mirror_curves":
+                            mcMod = obj.modifiers[0]
+                            box = col_.box()
+                            col1 = box.column()
+                            row1 = col1.row()
+                            col_ = col1.column(align = False)
+                            col_.scale_y = 1
+                            
+                            
+                            col_.label(text = "Mirror Guide Curves:", icon = "OUTLINER_OB_CURVES")
+                            row_ = col_.row(align = True)
+
+                            row_.prop(mcMod, '["Socket_2"]', text = 'Symetrize', expand = True, icon = "OUTLINER_OB_CURVES")
+                            row_.prop(mcMod, '["Socket_2"]', text = 'Mirror', expand = True, icon = "OUTLINER_OB_CURVES", invert_checkbox = True)
+                            
+                            
+                            box_ = col_.box()
+                            row_ = box_.row(align = False)
+                            row_.scale_y = 1
+                            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                            grid_l.alignment = "RIGHT"
+                            grid_l.scale_x = 1.5
+                            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                            
+                            grid_l.label(text = "X")
+                            grid_l.label(text = "Y")
+                            grid_l.label(text = "Z")
+                            
+                            grid_r.prop(mcMod, '["Socket_3"]', text = '')
+                            grid_r.prop(mcMod, '["Socket_4"]', text = '')
+                            grid_r.prop(mcMod, '["Socket_5"]', text = '')
+
+                            
+
+                            
+                            row_ = col_.row(align = True)
+                            row_.scale_y = 1.2
+                            row_.operator("object.bv2_apply_mirror_guides", text = "Apply Mirror", icon = "CHECKMARK", depress = True)
+                            row_.operator("object.bv2_delete_mirror_guides", text = "Delete Mirror", icon = "CANCEL")
+                        #------------------------------------------------------------------------------------------------------------------------    
+                        else:
+                            col_guides = col_.column(align=True)
+                            box_ = col_guides.box()
+                            col_ = box_.column(align = False)
+                            col_.scale_y = 1.2
+
+                            row_ = col_.row(align = True)
+                            row_.operator("object.bv2_generate_guides", text = "Generate Guides", icon = "OUTLINER_OB_CURVES", depress = True)
+                            row_.separator(factor=1)
+                            row_.operator("object.bv2_resample_guides", text = "Resample Guides", icon = "OUTLINER_OB_CURVES", depress = True)
+
+                            if "Socket_0" in bgenMod:
+                                box_ = col_guides.box()
+                                col_ = box_.column(align = False)
+                                col_.scale_y = 1.2
+                                row_ = col_.row(align = True)
+
+                                grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                grid_l.alignment = "RIGHT"
+                                grid_l.scale_x = 1.6
+                                grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                
+                                grid_l.label(text = "    Guide Radius: ")
+                                grid_l.label(text = "    Guide Points: ")
+                                
+                                grid_r.prop(bgenMod, '["Socket_0"]', text = '')
+                                grid_r.prop(bgenMod, '["Socket_1"]', text = '')
+                                
+                                if bgenMod["Socket_1"] == True:
+                                    grid_l.label(text = "Guid point Size: ") 
+                                    grid_r.prop(bgenMod, '["Socket_2"]', text = '') 
+                                
+                                mat_Shader = bpy.data.node_groups[bgenModName].nodes["ID:bv2_MC_001"].inputs[0].default_value
+                                grid_l.label(text = " Viewport Color: ")
+                                grid_r.prop(mat_Shader, 'diffuse_color', text = '')
+                            
+                            box_ = col_guides.box()
+                            col_ = box_.column(align = False)
+                            col_.scale_y = 1
+                            col_.operator("object.bv2_mirror_guides", text = "Mirror Guides", icon = "OUTLINER_OB_CURVES", depress = False)
+
                     else:
-                        box_ = col.box()
-                        col_ = box_.column(align = False)
-                        col_.separator(factor=.4)
-                        col_.scale_y = 1.6
-                        row_ = col_.row(align = True)
-                        row_.operator("object.bv2_generate_guides", text = "Generate Guides", icon = "OUTLINER_OB_CURVES", depress = True)
-                        row_.separator(factor=1)
-                        row_.operator("object.bv2_resample_guides", text = "Resample Guides", icon = "OUTLINER_OB_CURVES", depress = True)
-                        col_.separator(factor=.4)
-                        
+                        row1.prop(obj_exp, "menu_exp1",icon="TRIA_RIGHT", text="Hair Guides", emboss=False)
+                        row1.prop(bgenMod, '["Input_42"]', text = '')
                 #--------------------------------------------------------------------------------------------------------
 
-                
                 if mainCurve and get_gNode(obj)[2] == "ID:BV2_0001":  
                     main_obj = obj.name
                     mytool = context.scene.bv2_tools
@@ -3209,10 +4466,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
                     #INITIALIZE DRAWER
                     if obj_exp.my_exp1:
-                        row1.prop(obj_exp, "my_exp1",icon="TRIA_DOWN", text="INITIALIZE", emboss=False)
-                        row1.prop(bgenMod, '["Input_42"]', text = 'Low Poly')
-                        #col_ = col.column(align = True)
-                        
+                        row1.prop(obj_exp, "my_exp1",icon="TRIA_DOWN", text="INITIALIZE", emboss=False)  
+                        row1.label(icon="ALIGN_JUSTIFY")   
                         box_00 = col_.box().box()
                         col_c = box_00.column(align = False)
                         col_c.label(text="Hair Children Type:",icon = "OUTLINER_OB_CURVES")
@@ -3319,7 +4574,7 @@ class BV2_PT_ui_panel(bpy.types.Panel):
 
                     else:
                         row1.prop(obj_exp, "my_exp1",icon="TRIA_RIGHT", text="INITIALIZE", emboss=False)
-                        row1.prop(bgenMod, '["Input_42"]', text = 'Low Poly')
+                        row1.label(icon="ALIGN_JUSTIFY")
 
                     box_ = col.box()
                     col_ = box_.column(align = True)
@@ -3363,23 +4618,32 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             mrow1.prop(mts_,"name", text = "",toggle=True, emboss = True)
                             mrow1.operator("object.bv2_single_user_matt", text="", icon = "DUPLICATE")
 
+                            col_.separator()
+                            mbox_ = col_.box()
+                            mcol_ = mbox_.column()
+                            mrow_ = mcol_.row(align = True)
                             mrow_.prop(mytool, "mattren",expand = True)
+                            mrow_.scale_y = 1.2
                             
                             if bpy.context.scene.bv2_tools.mattren == 'EEVEE':
                                 mbox_ = col_.box()
                                 mcol_ = mbox_.column()
                                 mrow_ = mcol_.row(align = True)
-                                mrow_.label(text = "Hair Color:")
-
                                 #-------------------------------------------------------------------------------
+
                                 if 'color_switch_eevee' in material_nt_data and "ID:bv2_SC_001" in node_data:
                                     scCntr = node_data["ID:bv2_SC_001"].inputs[0]
                                     mrow_.prop(mytool, "material_color",expand = True)
                                     color_switch_eevee = material_nt_data["color_switch_eevee"]
                                     mrow_.separator()
+                                    #-------------------------------------------------------------------------------
                                     if bpy.context.scene.bv2_tools.material_color == "STRAND":
+                                        mbox_ = col_.box()
+                                        mcol_ = mbox_.column()
                                         mcol_.template_color_ramp(egrad, "color_ramp",expand = False)
                                     else:
+                                        mbox_ = col_.box()
+                                        mcol_ = mbox_.column()
                                         scCntr.draw(context, mcol_, dmNode, text = '')
                                     color_switch_eevee.inputs[0].draw(context, mrow_, color_switch_eevee, text = '')
                                     
@@ -3391,64 +4655,76 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 else:
                                     mrow_.operator("object.bv2_enter_texture",text="",icon="TEXTURE")  
                                 #-------------------------------------------------------------------------------
-
-                                row_ = col_.row(align = False)
+                                
+                                mbox_ = col_.box()
+                                mcol_ = mbox_.column()
+                                row_ = mcol_.row(align = False)
                                 grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
                                 grid_l.alignment = "RIGHT"
-                                grid_l.scale_x = 1.4
+                                grid_l.scale_x = 1.6
                                 grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
-                                
-                                grid_l.label(text = "Color Variation")
-                                grid_l.label(text = "            Metalic")
-                                grid_l.label(text = "         Specular")
-                                grid_l.label(text = "      Roughness")
-                                grid_l.label(text = "   Transmission")
-                                
+
+                                grid_l.label(text = "Color Variation:")
+                                grid_l.label(text = "            Metalic:")
+                                grid_l.label(text = "         Specular:")
+                                grid_l.label(text = "      Roughness:")
+                                grid_l.label(text = "   Transmission:")
+
                                 ecolvar.inputs[7].draw(context, grid_r, ecolvar, text = '')
-                                ebsdf.inputs[6].draw(context, grid_r, emix1Node, text = '')
-                                ebsdf.inputs[7].draw(context, grid_r, emix1Node, text = '')
-                                ebsdf.inputs[9].draw(context, grid_r, emix1Node, text = '')
+                                ebsdf.inputs[1].draw(context, grid_r, emix1Node, text = '')
+                                ebsdf.inputs[3].draw(context, grid_r, emix1Node, text = '')
+                                ebsdf.inputs[2].draw(context, grid_r, emix1Node, text = '')
                                 ebsdf.inputs[17].draw(context, grid_r, emix1Node, text = '')
                             
                             if bpy.context.scene.bv2_tools.mattren == 'CYCLES':
                                 mbox_ = col_.box()
                                 mcol_ = mbox_.column()
                                 mrow_ = mcol_.row(align = True)
-                                mrow_.label(text = "Hair Color:")
                                 #-------------------------------------------------------------------------------
                                 if 'color_switch_cycles' in material_nt_data and "ID:bv2_SC_001" in node_data:
                                     scCntr = node_data["ID:bv2_SC_001"].inputs[0]
                                     mrow_.prop(mytool, "material_color",expand = True)
                                     color_switch_cycles = material_nt_data["color_switch_cycles"]
+                                    mrow_.separator()
                                     if bpy.context.scene.bv2_tools.material_color == "STRAND":
+                                        mbox_ = col_.box()
+                                        mcol_ = mbox_.column()
                                         mcol_.template_color_ramp(cgrad, "color_ramp",expand = False)
                                     else:
+                                        mbox_ = col_.box()
+                                        mcol_ = mbox_.column()
                                         scCntr.draw(context, mcol_, dmNode, text = '')
                                     color_switch_cycles.inputs[0].draw(context, mrow_, color_switch_cycles, text = '')
                                 else:
                                     mcol_.template_color_ramp(cgrad, "color_ramp",expand = False)
 
+                                if context.mode == "PAINT_TEXTURE":
+                                    mrow_.operator("object.bv2_enter_texture",text="",icon="TEXTURE",depress=True)
+                                else:
+                                    mrow_.operator("object.bv2_enter_texture",text="",icon="TEXTURE") 
                                 #-------------------------------------------------------------------------------
                                 
-                                row_ = col_.row(align = False)
+                                mbox_ = col_.box()
+                                mcol_ = mbox_.column()
+                                row_ = mcol_.row(align = False)
                                 grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
                                 grid_l.alignment = "RIGHT"
-                                grid_l.scale_x = 1.2
+                                grid_l.scale_x = 1.3
                                 grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
                                 
-                                grid_l.label(text = "      Color Variation")
-                                grid_l.label(text = "            Roughness")
-                                grid_l.label(text = "Radial Roughness")
-                                grid_l.label(text = "                        Coat")
-                                grid_l.label(text = "Random Roughness")
-                                grid_l.label(text = "                           IOR")
+                                grid_l.label(text = "       Color Variation:")
+                                grid_l.label(text = "             Roughness:")
+                                grid_l.label(text = " Radial Roughness:")
+                                grid_l.label(text = "                        Coat:")
+                                grid_l.label(text = "Random Roughness:")
+                                grid_l.label(text = "                          IOR:")
                                 
                                 ccolvar.inputs[7].draw(context, grid_r, ecolvar, text = '')
-                                cbsdf.inputs[5].draw(context, grid_r, emix1Node, text = '')
                                 cbsdf.inputs[6].draw(context, grid_r, emix1Node, text = '')
                                 cbsdf.inputs[7].draw(context, grid_r, emix1Node, text = '')
-                                cbsdf.inputs[11].draw(context, grid_r, emix1Node, text = '')
                                 cbsdf.inputs[8].draw(context, grid_r, emix1Node, text = '')
+                                cbsdf.inputs[12].draw(context, grid_r, emix1Node, text = '')
+                                cbsdf.inputs[9].draw(context, grid_r, emix1Node, text = '')
                         else: #MATERIAL DRAWER CLOSE
                             row1.prop(obj_exp, "my_expT1",icon="TRIA_RIGHT", text="MATERIAL", emboss=False)
                             matCntr.draw(context, row1, matNode, text = '')
@@ -3502,6 +4778,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_l.label(text = "      Viewport Amount")
                             grid_l.label(text = "Interpulation Amount")
                             
+                            grid_r.use_property_split = True
+                            grid_r.use_property_decorate = True
                             #row_vp = grid_r.row()
                             #row_vp.prop(bv2_tools, "vp_amount",expand=True)
                             grid_r.prop(bgenMod, '["Input_12"]', text = '')
@@ -3525,6 +4803,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 grid_l.label(text = " Extend strand Roots") if "Input_78" in bgenMod else 0
                                 #grid_l.label(text = "           [Clump Factor]")
 
+                                grid_r.use_property_split = True
+                                grid_r.use_property_decorate = True
                                 #grid_r.separator(factor=.5)
                                 #grid_r.prop(bgenMod, '["Input_11"]', text = '')
                                 #grid_r.prop(bgenMod, '["Input_13"]', text = '')
@@ -3547,7 +4827,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_l.label(text = "Children Amount")
                             grid_l.label(text = "                   Radius")
 
-
+                            grid_r.use_property_split = True
+                            grid_r.use_property_decorate = True
                             grid_r.prop(bgenMod, '["Input_67"]', text = '')
                             grid_r.prop(bgenMod, '["Input_68"]', text = '')
                             grid_r.prop(bgenMod, '["Input_69"]', text = '')
@@ -3650,6 +4931,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_l.label(text = "    Curl Radius")
                             grid_l.label(text = "Random Offset")
 
+                            grid_r.use_property_split = True
+                            grid_r.use_property_decorate = True
                             grid_r.prop(bgenMod, '["Input_17"]', text = '')
                             grid_r.prop(bgenMod, '["Input_18"]', text = '')
                             grid_r.prop(bgenMod, '["Input_19"]', text = '')
@@ -3669,6 +4952,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_l.label(text = "    Curl Radius")
                             grid_l.label(text = "Random Offset")
                             
+                            grid_r.use_property_split = True
+                            grid_r.use_property_decorate = True
                             grid_r.prop(bgenMod, '["Input_17"]', text = '')
                             grid_r.prop(bgenMod, '["Input_18"]', text = '')
                             grid_r.prop(bgenMod, '["Input_19"]', text = '')
@@ -3717,6 +5002,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         grid_l.label(text = "     Braid Width")
                         grid_l.label(text = "Braid Thickness")
 
+                        grid_r.use_property_split = True
+                        grid_r.use_property_decorate = True
                         grid_r.prop(bgenMod, '["Input_22"]', text = '')
                         grid_r.prop(bgenMod, '["Input_23"]', text = '')
                         grid_r.prop(bgenMod, '["Input_24"]', text = '')
@@ -3763,6 +5050,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         grid_l.label(text = " Frequency")
                         grid_l.label(text = "Noise Width")
                         
+                        grid_r.use_property_split = True
+                        grid_r.use_property_decorate = True
                         grid_r.prop(bgenMod, '["Input_32"]', text = '')
                         grid_r.prop(bgenMod, '["Input_33"]', text = '')
                         grid_r.prop(bgenMod, '["Input_34"]', text = '')
@@ -3798,7 +5087,9 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_l.label(text = "Displacement")
                             grid_l.label(text = "          Length")
                             grid_l.label(text = "              Seed")
-                        
+
+                            grid_r.use_property_split = True
+                            grid_r.use_property_decorate = True
                             grid_r.prop(bgenMod, '["Input_55"]', text = '')
                             grid_r.prop(bgenMod, '["Input_54"]', text = '')
                             grid_r.prop(bgenMod, '["Input_65"]', text = '')
@@ -3830,6 +5121,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                         box_ = col1.box()
                         col_ = box_.column()
                         col_.scale_y = 1.2
+                        col_.use_property_split = True
+                        col_.use_property_decorate = True
                         col_.prop(bgenMod, '["Input_62"]', text = 'Length Variation')
                         
                         box_ = col1.box()
@@ -3882,7 +5175,10 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             grid_l.label(text = "Instance Probability")
                             grid_l.label(text = "                    Seed")
                             
+                            
                             haNode.inputs[0].draw(context, grid_r, haNode, text = '')
+                            grid_r.use_property_split = True
+                            grid_r.use_property_decorate = True
                             grid_r.separator()
                             grid_r.prop(bgenMod, '["Input_73"]', text = '')
                             grid_r.prop(bgenMod, '["Input_74"]', text = '')
@@ -3959,18 +5255,105 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                             vcol.scale_y = 1.8
                             vrow = vcol.row(align = True)
                             
-
+                            #-----------------------------------------------------------------------------------------------------------------------
                             mod_sim_data = bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value.name
-                            sim_obj_vts = bpy.data.collections[mod_sim_data].objects[0].modifiers[0].node_group
+                            sim_obj_vts = get_bgenGroom_Mod(bpy.data.collections[mod_sim_data].objects[0], nodeID_3)[0].node_group
                             sim_obj_data = bpy.data.collections[mod_sim_data].objects[0].modifiers["Cloth"]
-
-                            #sim_obj_vts = bpy.data.node_groups[bpy.context.scene.bv2_tools.vts_mod]
+                            #-----------------------------------------------------------------------------------------------------------------------
                             vrow.operator_menu_enum("object.bv2_choose_vts_nodetree",'vts_nodes', text="" , icon = "NODETREE")
-                            #vrow.prop(myTools, "vts_mod", text = "", icon = "NODETREE", icon_only = False)
                             vrow.prop(sim_obj_vts,"name", text = "",toggle=True, emboss = True)
                             vrow.prop(sim_obj_vts,"use_fake_user", text = "",toggle=True, emboss = True)
                             vrow.operator("object.bv2_single_user_vts", text="", icon = "DUPLICATE")
+                            #-----------------------------------------------------------------------------------------------------------------------
+                            sim_col = bgenMod.node_group.nodes["ID:bv2_CC_001"].inputs[1].default_value
+                            sim_obj = bpy.data.collections[sim_col.name].objects[0]
+                            #-----------------------------------------------------------------------------------------------------------------------
+                            box = col.box()
+                            vcol = box.column()
+                            vcol.scale_y = 1.2
+                            
+                            vrow = vcol.row(align = True)
 
+                            if obj_exp.menu_exp2:
+                                vrow.prop(obj_exp, "menu_exp2",icon="TRIA_DOWN", text="Sim Guides", emboss=False)
+                                vrow.prop(bgenMod, '["Input_42"]', text = '')
+                                if sim_obj.modifiers[0].type == "NODES" and sim_obj.modifiers[0].node_group.name == "00_bv2: [Resample Curve]":
+                                    box = vcol.box()
+                                    col1 = box.column()
+                                    row1 = col1.row()
+                                    col_ = col1.column(align = False)
+                                    col_.scale_y = 1
+                                    
+                                    rsg_ng_name = sim_obj.modifiers[0].node_group.name # Resample guide Node Group Name
+                                    rsg_nt_data = bpy.data.node_groups[rsg_ng_name].nodes  #Resample guide NodeTree Data
+
+                                    resample_sim_node = rsg_nt_data["ID:Resample_node"]
+
+                                    col_.label(text = "Resample Sim Guides:", icon = "OUTLINER_OB_CURVES")
+                                    box_ = col_.box()
+                                    row_ = box_.row(align = False)
+                                    row_.scale_y = 1.2
+                                    grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                    grid_l.alignment = "RIGHT"
+                                    grid_l.scale_x = 1.4
+                                    grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                    
+                                    if resample_sim_node.mode == "COUNT":
+                                        grid_l.label(text = "    Resample Type")
+                                        grid_l.label(text = "Resample Amount")
+
+                                        grid_r.prop(resample_sim_node, "mode", text="")
+                                        resample_sim_node.inputs[2].draw(context, grid_r, resample_sim_node, text = '') # Resample Count
+                                    elif resample_sim_node.mode == "LENGTH":
+                                        grid_l.label(text = "Resample Type")
+                                        grid_l.label(text = "Resample Amount")
+
+                                        grid_r.prop(resample_sim_node, "mode", text="")
+                                        resample_sim_node.inputs[3].draw(context, grid_r, resample_sim_node, text = '') # Resample Length
+                                    else:
+                                        grid_l.label(text = "Resample Type")
+                                        grid_r.prop(resample_sim_node, "mode", text="")
+                                    
+                                    row_ = col_.row(align = True)
+                                    row_.scale_y = 1.2
+                                    row_.operator("object.bv2_apply_resample_sim_guides", text = "Apply", icon = "CHECKMARK", depress = True)
+                                    row_.operator("object.bv2_delete_resample_sim_guides", text = "Delete", icon = "CANCEL")
+                                else:
+                                    col_guides = vcol.column(align=True)
+                                    box_ = col_guides.box()
+                                    col_ = box_.column(align = False)
+                                    col_.scale_y = 1.4
+
+                                    col_.operator("object.bv2_resample_sim_guides", text = "Resample Sim Guides", icon = "OUTLINER_OB_CURVES", depress = True)
+
+                                    if "Socket_0" in bgenMod:
+                                        box_ = col_guides.box()
+                                        col_ = box_.column(align = False)
+                                        col_.scale_y = 1.2
+                                        row_ = col_.row(align = True)
+
+                                        grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                        grid_l.alignment = "RIGHT"
+                                        grid_l.scale_x = 1.6
+                                        grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                        
+                                        grid_l.label(text = "   Guide Radius: ")
+                                        grid_l.label(text = "   Guide Points: ")
+                                        
+                                        grid_r.prop(bgenMod, '["Socket_0"]', text = '')
+                                        grid_r.prop(bgenMod, '["Socket_1"]', text = '')
+                                        
+                                        if bgenMod["Socket_1"] == True:
+                                            grid_l.label(text = "Guid point Size: ") 
+                                            grid_r.prop(bgenMod, '["Socket_2"]', text = '')
+                                        
+                                        mat_Shader = bpy.data.node_groups[bgenModName].nodes["ID:bv2_MC_001"].inputs[0].default_value
+                                        grid_l.label(text = " Viewport Color: ")
+                                        grid_r.prop(mat_Shader, 'diffuse_color', text = '')
+                            else:
+                                vrow.prop(obj_exp, "menu_exp2",icon="TRIA_RIGHT", text="Sim Guides", emboss=False)
+                                vrow.prop(bgenMod, '["Input_42"]', text = '')
+                            #-----------------------------------------------------------------------------------------------------------------------
                             boxSv = col.box()
                             colSv = boxSv.column(align = True)
                             colSv.scale_y = 1.2
@@ -3981,6 +5364,20 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 rowSv.prop(obj_exp, "my_expS2",icon="TRIA_DOWN", text="Simulation Settings", emboss=False)
                                 rowSv.prop(sim_obj_data, "show_viewport", text = "")
                                 rowSv.prop(sim_obj_data, "show_render", text = "")
+                                #------------------------------------------------------------------------------------------------
+                                for mod in sim_obj.modifiers:
+                                    if mod.type == 'SURFACE_DEFORM':
+                                        boxss = colSv.box()
+                                        colss = boxss.column(align = False)
+                                        colss.scale_y = 1
+                                        surface_deform_mod = sim_obj.modifiers[mod.name]
+
+                                        colss.prop(surface_deform_mod, 'target', text = 'Target')
+                                        if surface_deform_mod.is_bound:
+                                            colss.operator("object.surface_deform_bind", text="Unbind")
+                                        else:
+                                            colss.operator("object.surface_deform_bind", text="Bind",depress=True)
+                                
 
                                 boxss = colSv.box()
                                 colss = boxss.column(align = False)
@@ -3988,6 +5385,8 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                 rowss = colss.row(align = True)
                                 rowss.scale_x = 1.2
                                 rowss.alignment = "LEFT"
+
+                                
                                 if obj_exp.my_expS1:
                                     rowss.prop(obj_exp, "my_expS1",icon="DOWNARROW_HLT", text="Weigth Paint", emboss=False)
                                     try:
@@ -4031,6 +5430,31 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                     grid_r.prop(sim_obj_data.settings, "tension_stiffness", text = "")
                                     grid_r.prop(sim_obj_data.settings, "pin_stiffness", text = "")
                                     grid_r.prop(sim_obj_data.settings.effector_weights, "all", text = "")
+                                    #------------------------------------------------------------------------------------------------
+                                    for mod in sim_obj.modifiers:
+                                        if mod.type == 'SMOOTH':
+                                            boxss = colSv.box()
+                                            colss = boxss.column(align = False)
+                                            colss.scale_y = 1
+                                            smooth_mod = sim_obj.modifiers[mod.name]
+                                            
+                                            row_ = colss.row(align = True)
+                                            grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                            grid_l.alignment = "RIGHT"
+                                            grid_l.scale_x = 1.8
+                                            grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=False)
+                                            
+                                            grid_l.label(text = "Smooth Factor: ")
+                                            grid_l.label(text = "            Factor: ")
+                                            grid_l.label(text = "           Repeat: ")
+                                            
+                                            grid_rr = grid_r.row(align=True)
+                                            grid_rr.scale_x = 1.2
+                                            grid_rr.prop(smooth_mod, 'show_viewport', text = '')
+                                            grid_rr.prop(smooth_mod, 'show_render', text = '')
+                                            grid_r.prop(smooth_mod, 'factor', text = '')
+                                            grid_r.prop(smooth_mod, 'iterations', text = '')
+                                    #------------------------------------------------------------------------------------------------
                                 else:
                                     rowss.prop(obj_exp, "my_exp12",icon="RIGHTARROW", text="Sim Values", emboss=False)
 
@@ -4054,13 +5478,13 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                         row_ = col_col.row(align = False)
                                         grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
                                         grid_l.alignment = "RIGHT"
-                                        grid_l.scale_x = 1.6
+                                        grid_l.scale_x = 1.2
                                         grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
 
-                                        grid_l.label(text = "    Collision Collection")
-                                        grid_l.label(text = "       Collision Quality")
-                                        grid_l.label(text = "                  Distance")
-                                        grid_l.label(text = "      Impulse Clamping")
+                                        grid_l.label(text = "    Collision Collection:")
+                                        grid_l.label(text = "       Collision Quality:")
+                                        grid_l.label(text = "                    Distance:")
+                                        grid_l.label(text = "      Impulse Clamping:")
 
                                         grid_r.prop(sim_obj_data.collision_settings, "collection", text = "")
                                         grid_r.prop(sim_obj_data.collision_settings, "collision_quality", text = "")
@@ -4084,12 +5508,12 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                         row_ = col_col.row(align = False)
                                         grid_l = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
                                         grid_l.alignment = "RIGHT"
-                                        grid_l.scale_x = 1.6
+                                        grid_l.scale_x = 1.2
                                         grid_r = row_.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
 
-                                        grid_l.label(text = "  Self Collision Friction")
-                                        grid_l.label(text = "Self Collision Distance")
-                                        grid_l.label(text = "      Impulse Clamping")
+                                        grid_l.label(text = "  Self Collision Friction:")
+                                        grid_l.label(text = "Self Collision Distance:")
+                                        grid_l.label(text = "       Impulse Clamping:")
 
                                         grid_r.prop(sim_obj_data.collision_settings, "self_friction", text = "")
                                         grid_r.prop(sim_obj_data.collision_settings, "self_distance_min", text = "")
@@ -4127,14 +5551,30 @@ class BV2_PT_ui_panel(bpy.types.Panel):
                                     grid_r.prop(sim_obj_data.point_cache, "use_disk_cache", text = "Use Disk Cache")
 
                                     colss.prop(sim_obj_data.point_cache, "info", text = "")
-                                    rowss = colss.row()
-                                    rowss.scale_y = 1.4
-                                    rowss.operator("object.bake_hair_sim",text="Bake all Physics")
-                                    if sim_obj_data.point_cache.is_baked == True:
-                                        rowss.operator("ptcache.free_bake_all",depress=True)
-                                    else:
-                                        rowss.operator("ptcache.free_bake_all",depress=False)
 
+                                    #--------------------------------------------------------------------------------------------------------
+                                    colss = boxss.column(align = False)
+                                    colss.scale_y = 1.4
+
+                                    if sim_obj_data.point_cache.is_baked == True:
+                                        colss.operator("object.bake_hair_sim",text="Delete Bake", depress=False)
+                                    else:
+                                       colss.operator("object.bake_hair_sim",text="Bake",depress=True)
+
+                                    colss = boxss.column(align = False)
+                                    colss.scale_y = 1
+                                    rowss = colss.row()
+                                    rowss.scale_y = 1.1
+
+                                    grid_l = rowss.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+                                    grid_l.scale_x = 1
+                                    grid_r = rowss.grid_flow(row_major=False, columns=1, even_columns=False, even_rows=False, align=True)
+
+                                    grid_l.operator("object.calculate_to_frame",text="Calculate to Frame")
+                                    grid_l.operator("object.current_cache_to_bake",text="Current Cache to Bake")
+
+                                    grid_r.operator("object.bake_all_dynamics",text="Bake All Dynamics")
+                                    grid_r.operator("object.delete_all_bakes",text="Delete all bakes")
 
                                 else:
                                     rowss.prop(obj_exp, "my_exp10",icon="RIGHTARROW", text="Bake to Cache Settings", emboss=False)
@@ -4355,8 +5795,11 @@ bv2Classes = (BV2_UL_hair_curves, BV2_PT_bv2Properties, BV2_PT_bv2ExpandProp, BV
                 BV2_OT_single_user_vts, BV2_OT_single_user_matt, BV2_OT_choose_nodeTree, BV2_OT_rename_nodeTree, BV2_OT_resample_guides,
                 BV2_OT_generate_guides, BV2_OT_add_empty_hair, BV2_OT_apply_guides, BV2_OT_delete_guides, BV2_OT_rescale_hair, 
                 BV2_OT_remove_sim_collection, BV2_OT_remove_empty_hair, BV2_OT_hide_hair_curve, BV2_OT_execute_cloth_settings,BV2_preferences,
-                BV2_OT_bake_hair_sim,BV2_MT_operator_menu,BV2_OT_add_bgen_groom,BV2_OT_remove_bgen_groom,BV2_OT_choose_vts_nodeTree,
-                BV2_OT_fix_hair_position,BV2_PT_slots_projectpaint,BV2_OT_enter_texture)
+                BV2_MT_operator_menu,BV2_OT_add_bgen_groom,BV2_OT_remove_bgen_groom,BV2_OT_choose_vts_nodeTree,
+                BV2_OT_fix_hair_position,BV2_PT_slots_projectpaint,BV2_OT_enter_texture,BV2_OT_SurfaceDeformBind, BV2_OT_lowpoly_all, BV2_OT_highpoly_all,
+                BV2_OT_apply_resample_guides, BV2_OT_delete_resample_guides,BV2_OT_resample_sim_guides, BV2_OT_apply_resample_sim_guides, 
+                BV2_OT_delete_resample_sim_guides, BV2_OT_bake_hair_sim, BV2_OT_calculate_to_frame, BV2_OT_current_cache_to_bake, BV2_OT_bake_all_dynamics,
+                BV2_OT_delete_all_bakes, BV2_OT_mirror_guides, BV2_OT_apply_mirror_guides, BV2_OT_delete_mirror_guides)
                 
 
 def register():  
